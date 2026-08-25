@@ -2,9 +2,17 @@ import { ApolloServer } from '@apollo/server';
 import { startStandaloneServer } from '@apollo/server/standalone';
 import { mergeResolvers, mergeTypeDefs } from '@graphql-tools/merge';
 import fg from 'fast-glob';
-import { EmailAddressResolver, EmailAddressTypeDefinition } from 'graphql-scalars';
+import {
+  EmailAddressResolver,
+  EmailAddressTypeDefinition,
+  JSONResolver,
+  JSONDefinition,
+  DateTimeResolver,
+  DateTimeTypeDefinition,
+} from 'graphql-scalars';
 import { dirname, extname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { env } from './shared/env.js';
 import { verifyAccessToken } from './shared/token.js';
 import type { GraphQLContext } from './types/context.js';
 
@@ -17,6 +25,8 @@ type HandlerModule = {
 
 const baseTypeDefs = `#graphql
   ${EmailAddressTypeDefinition}
+  ${JSONDefinition}
+  ${DateTimeTypeDefinition}
 
   type Query {
     _empty: String
@@ -29,6 +39,8 @@ const baseTypeDefs = `#graphql
 
 const baseResolvers = {
   EmailAddress: EmailAddressResolver,
+  JSON: JSONResolver,
+  DateTime: DateTimeResolver,
 };
 
 async function loadHandlers() {
@@ -71,7 +83,7 @@ const server = new ApolloServer({
   resolvers,
 });
 
-const port = Number(process.env.PORT) || 4000;
+const port = env.PORT;
 const { url } = await startStandaloneServer(server, {
   listen: { port },
   context: async ({ req }): Promise<GraphQLContext> => {
@@ -94,11 +106,10 @@ const { url } = await startStandaloneServer(server, {
 });
 
 async function reloadHasuraRemoteSchema() {
-  const hasuraMetadataUrl = process.env.HASURA_METADATA_URL || 'http://localhost:8080/v1/metadata';
-  const adminSecret = process.env.HASURA_ADMIN_SECRET || 'hasura-secret';
-  const remoteSchemaName = process.env.HASURA_REMOTE_SCHEMA_NAME || 'travel_server';
-  const graphqlServerUrl =
-    process.env.HASURA_GRAPHQL_REMOTE_URL || 'http://host.docker.internal:4000/';
+  const hasuraMetadataUrl = env.HASURA_METADATA_URL;
+  const adminSecret = env.HASURA_ADMIN_SECRET;
+  const remoteSchemaName = env.HASURA_REMOTE_SCHEMA_NAME;
+  const graphqlServerUrl = env.HASURA_GRAPHQL_REMOTE_URL;
 
   try {
     const response = await fetch(hasuraMetadataUrl, {

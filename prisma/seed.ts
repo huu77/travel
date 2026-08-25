@@ -1,10 +1,10 @@
-import 'dotenv/config';
 import argon2 from 'argon2';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../src/generated/prisma/client.js';
+import { env } from '../src/shared/env.js';
 
 const adapter = new PrismaPg({
-  connectionString: process.env.DATABASE_URL,
+  connectionString: env.DATABASE_URL,
 });
 
 const prisma = new PrismaClient({ adapter });
@@ -94,8 +94,49 @@ async function seedCurrencies() {
   });
 }
 
+async function seedProviders() {
+  await prisma.provider.createMany({
+    data: [
+      {
+        providerId: '00000000-0000-4000-9000-000000000001',
+        code: 'duffel',
+        name: 'Duffel Flights API',
+        type: 'FLIGHT',
+        description: 'Global flight search, hold orders and ticketing',
+        customFields: { seed: true, apiVersion: 'v2', environment: 'sandbox' },
+      },
+      {
+        providerId: '00000000-0000-4000-9000-000000000002',
+        code: 'stripe',
+        name: 'Stripe Payments',
+        type: 'PAYMENT',
+        description: 'Global card payments and refunds',
+        customFields: { seed: true, currency: 'USD' },
+      },
+      {
+        providerId: '00000000-0000-4000-9000-000000000003',
+        code: 'amadeus',
+        name: 'Amadeus GDS',
+        type: 'FLIGHT',
+        description: 'Global Distribution System',
+        customFields: { seed: true },
+      },
+      {
+        providerId: '00000000-0000-4000-9000-000000000004',
+        code: 'vnpay',
+        name: 'VNPay Gateway',
+        type: 'PAYMENT',
+        description: 'Vietnam domestic QR and banking payment',
+        customFields: { seed: true, currency: 'VND' },
+      },
+    ],
+    skipDuplicates: true,
+  });
+}
+
 async function main() {
   await clearSeedData();
+  await seedProviders();
   await seedCurrencies();
 
   const hashedPassword = await argon2.hash(SEED_PASSWORD);
@@ -215,24 +256,48 @@ async function main() {
     data: {
       userId: an.userId,
       provider: 'duffel',
-      providerBookingId: 'DUF-SEED-1001',
+      providerBookingId: 'ord_0000A1B2C3D4E5F6',
       status: 'CONFIRMED',
       totalAmount: '3850000',
       currency: 'VND',
       customFields: {
         seed: true,
+        provider: 'duffel',
+        duffelOfferId: 'off_00009htYpSCXrwaCd9wbX1',
+        bookingReference: 'VN789X',
+        cabinClass: 'economy',
+        paymentRequiredBy: '2026-09-12T05:00:00Z',
         route: 'SGN-HAN',
-        airline: 'Vietnam Airlines',
-        flightNumber: 'VN216',
-        departureAt: '2026-09-12T07:30:00+07:00',
-        arrivalAt: '2026-09-12T09:40:00+07:00',
+        flight: {
+          airline: 'Vietnam Airlines',
+          airlineCode: 'VN',
+          flightNumber: 'VN216',
+          aircraft: 'Boeing 787-9',
+          cabinClass: 'economy',
+        },
+        slices: [
+          {
+            origin: 'SGN',
+            originName: 'Tan Son Nhat International Airport',
+            destination: 'HAN',
+            destinationName: 'Noi Bai International Airport',
+            departureAt: '2026-09-12T07:30:00+07:00',
+            arrivalAt: '2026-09-12T09:40:00+07:00',
+            duration: 'PT2H10M',
+          },
+        ],
       },
       bookingPassengers: {
-        create: an.passengers.map((passenger) => ({
+        create: an.passengers.map((passenger, index) => ({
           passengerId: passenger.passengerId,
           customFields: {
             seed: true,
+            duffelPassengerId: `pas_0000A1B2C3D${index + 1}`,
             snapshotName: `${passenger.firstName} ${passenger.lastName}`,
+            type: passenger.type,
+            gender: passenger.gender,
+            nationality: passenger.nationality,
+            passportNumber: passenger.passportNumber,
           },
         })),
       },
@@ -243,24 +308,48 @@ async function main() {
     data: {
       userId: linh.userId,
       provider: 'duffel',
-      providerBookingId: 'DUF-SEED-1002',
+      providerBookingId: 'ord_0000A1B2C3D4E5F7',
       status: 'PENDING',
       totalAmount: '420.50',
       currency: 'USD',
       customFields: {
         seed: true,
+        provider: 'duffel',
+        duffelOfferId: 'off_00009htYpSCXrwaCd9wbX2',
+        bookingReference: 'SQ456Y',
+        cabinClass: 'business',
+        paymentRequiredBy: '2026-10-03T17:00:00Z',
         route: 'SGN-SIN',
-        airline: 'Singapore Airlines',
-        flightNumber: 'SQ185',
-        departureAt: '2026-10-03T19:40:00+07:00',
-        arrivalAt: '2026-10-03T22:50:00+08:00',
+        flight: {
+          airline: 'Singapore Airlines',
+          airlineCode: 'SQ',
+          flightNumber: 'SQ185',
+          aircraft: 'Airbus A350-900',
+          cabinClass: 'business',
+        },
+        slices: [
+          {
+            origin: 'SGN',
+            originName: 'Tan Son Nhat International Airport',
+            destination: 'SIN',
+            destinationName: 'Singapore Changi Airport',
+            departureAt: '2026-10-03T19:40:00+07:00',
+            arrivalAt: '2026-10-03T22:50:00+08:00',
+            duration: 'PT2H10M',
+          },
+        ],
       },
       bookingPassengers: {
-        create: linh.passengers.map((passenger) => ({
+        create: linh.passengers.map((passenger, index) => ({
           passengerId: passenger.passengerId,
           customFields: {
             seed: true,
+            duffelPassengerId: `pas_0000B1B2C3D${index + 1}`,
             snapshotName: `${passenger.firstName} ${passenger.lastName}`,
+            type: passenger.type,
+            gender: passenger.gender,
+            nationality: passenger.nationality,
+            passportNumber: passenger.passportNumber,
           },
         })),
       },
@@ -271,23 +360,48 @@ async function main() {
     data: {
       userId: minh.userId,
       provider: 'duffel',
-      providerBookingId: 'DUF-SEED-1003',
+      providerBookingId: 'ord_0000A1B2C3D4E5F8',
       status: 'CANCELLED',
       totalAmount: '2150000',
       currency: 'VND',
       customFields: {
         seed: true,
-        route: 'HAN-DAD',
-        airline: 'Vietjet Air',
-        flightNumber: 'VJ501',
+        provider: 'duffel',
+        duffelOfferId: 'off_00009htYpSCXrwaCd9wbX3',
+        bookingReference: 'VJ123Z',
+        cabinClass: 'economy',
         cancellationReason: 'Customer requested itinerary change',
+        route: 'HAN-DAD',
+        flight: {
+          airline: 'Vietjet Air',
+          airlineCode: 'VJ',
+          flightNumber: 'VJ501',
+          aircraft: 'Airbus A321',
+          cabinClass: 'economy',
+        },
+        slices: [
+          {
+            origin: 'HAN',
+            originName: 'Noi Bai International Airport',
+            destination: 'DAD',
+            destinationName: 'Da Nang International Airport',
+            departureAt: '2026-10-15T06:00:00+07:00',
+            arrivalAt: '2026-10-15T07:20:00+07:00',
+            duration: 'PT1H20M',
+          },
+        ],
       },
       bookingPassengers: {
-        create: minh.passengers.map((passenger) => ({
+        create: minh.passengers.map((passenger, index) => ({
           passengerId: passenger.passengerId,
           customFields: {
             seed: true,
+            duffelPassengerId: `pas_0000C1B2C3D${index + 1}`,
             snapshotName: `${passenger.firstName} ${passenger.lastName}`,
+            type: passenger.type,
+            gender: passenger.gender,
+            nationality: passenger.nationality,
+            passportNumber: passenger.passportNumber,
           },
         })),
       },

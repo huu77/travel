@@ -48,6 +48,13 @@ enum AccountType {
   PROVIDER
 }
 
+enum ProviderType {
+  FLIGHT
+  PAYMENT
+  STAYS
+  CAR
+}
+
 model User {
   userId   String @id @default(uuid()) @db.Uuid
   password String @default("Password123!")
@@ -115,35 +122,17 @@ model Booking {
   totalAmount Decimal @db.Decimal(20, 2)
   currency    String  @db.Char(3)
 
-  /**
-   * Snapshot data from Duffel when booking is created.
-   *
-   * Example:
-   * {
-   *   "offer": {
-   *     "id": "...",
-   *     "expires_at": "..."
-   *   },
-   *   "flight": {
-   *     "airline": "...",
-   *     "flight_number": "...",
-   *     "origin": "SGN",
-   *     "destination": "HAN",
-   *     "departure_at": "...",
-   *     "arrival_at": "..."
-   *   }
-   * }
-   */
   customFields Json?
 
-  user User @relation(fields: [userId], references: [userId])
+  user        User      @relation(fields: [userId], references: [userId])
+  providerRef Provider? @relation(fields: [provider], references: [code])
 
   bookingPassengers BookingPassenger[]
 
   transactions Transaction[]
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
   @@index([userId])
@@ -158,17 +147,13 @@ model BookingPassenger {
   bookingId   String @db.Uuid
   passengerId String @db.Uuid
 
-  /**
-   * Snapshot passenger data at booking time.
-   * Useful if passenger profile changes later.
-   */
   customFields Json?
 
   booking   Booking   @relation(fields: [bookingId], references: [bookingId])
   passenger Passenger @relation(fields: [passengerId], references: [passengerId])
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
   @@unique([bookingId, passengerId])
@@ -193,13 +178,14 @@ model Transaction {
 
   customFields Json?
 
-  user    User    @relation(fields: [userId], references: [userId])
-  booking Booking @relation(fields: [bookingId], references: [bookingId])
+  user        User      @relation(fields: [userId], references: [userId])
+  booking     Booking   @relation(fields: [bookingId], references: [bookingId])
+  providerRef Provider? @relation(fields: [provider], references: [code])
 
   entries TransactionEntry[]
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
   @@index([userId])
@@ -215,7 +201,7 @@ model TransactionEntry {
   transactionId String @db.Uuid
 
   accountType AccountType
-  accountId   String @db.Uuid
+  accountId   String      @db.Uuid
 
   direction EntryDirection
 
@@ -224,10 +210,10 @@ model TransactionEntry {
 
   customFields Json?
 
-transaction Transaction @relation(fields: [transactionId], references: [transactionId]) 
+  transaction Transaction @relation(fields: [transactionId], references: [transactionId])
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
   @@index([transactionId])
@@ -238,16 +224,38 @@ transaction Transaction @relation(fields: [transactionId], references: [transact
 model Currency {
   currencyId String @id @default(uuid()) @db.Uuid
 
-  code          String @unique @db.Char(3)
+  code          String  @unique @db.Char(3)
   name          String
   symbol        String?
-  decimalDigits Int @default(2)
+  decimalDigits Int     @default(2)
 
   customFields Json?
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
   @@map("currencies")
+}
+
+model Provider {
+  providerId String @id @default(uuid()) @db.Uuid
+
+  code String       @unique
+  name String
+  type ProviderType
+
+  isActive    Boolean @default(true)
+  description String?
+
+  customFields Json?
+
+  bookings     Booking[]
+  transactions Transaction[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@map("providers")
 }
