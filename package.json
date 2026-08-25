@@ -3,6 +3,14 @@
   "version": "1.0.0",
   "description": "",
   "type": "module",
+  "imports": {
+    "@/*": "./src/*",
+    "@servers/*": "./src/servers/*",
+    "@handlers/*": "./src/handlers/*",
+    "@shared/*": "./src/shared/*",
+    "@types/*": "./src/types/*",
+    "@generated/*": "./src/generated/*"
+  },
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",

@@ -1,7 +1,7 @@
 import argon2 from 'argon2';
 import { GraphQLError } from 'graphql';
-import type { Prisma, User } from '../generated/prisma/client.js';
-import { prisma } from '../prisma.js';
+import type { Prisma, User } from '@generated/prisma/client.js';
+import { prisma } from '@/prisma.js';
 
 interface RegisterInput {
   email: string;

@@ -1,7 +1,7 @@
 import argon2 from 'argon2';
 import { GraphQLError } from 'graphql';
-import { prisma } from '../prisma.js';
-import { generateAccessToken, generateRefreshToken } from '../shared/token.js';
+import { prisma } from '@/prisma.js';
+import { generateAccessToken, generateRefreshToken } from '@shared/token.js';
 
 export interface LoginResponse {
   accessToken: string;

@@ -1,12 +1,12 @@
 import { GraphQLError } from 'graphql';
-import { prisma } from '../prisma.js';
-import { generateAccessToken, verifyRefreshToken } from '../shared/token.js';
+import { prisma } from '@/prisma.js';
+import { generateAccessToken, verifyRefreshToken } from '@shared/token.js';
 
 export interface RefreshTokenResponse {
   accessToken: string;
 }
 
-export const refreshAccessToken = async (refreshToken: string): Promise<RefreshTokenResponse> => {
+const refreshAccessToken = async (refreshToken: string): Promise<RefreshTokenResponse> => {
   let userId: string;
   try {
     const payload = verifyRefreshToken(refreshToken);

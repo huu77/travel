@@ -1,4 +1,4 @@
-import authentication from '../servers/login.js';
+import authentication from '@servers/auth/login.js';
 
 export const typeDefs = `#graphql
   input LoginInput {

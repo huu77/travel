@@ -1,4 +1,4 @@
-import refreshAccessToken from '../servers/refreshToken.js';
+import refreshAccessToken from '@servers/auth/refreshToken.js';
 
 export const typeDefs = `#graphql
   input RefreshTokenInput {

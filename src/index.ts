@@ -146,6 +146,7 @@ async function reloadHasuraRemoteSchema() {
             definition: {
               url: graphqlServerUrl,
               timeout_seconds: 60,
+              forward_client_headers: true,
             },
           },
         }),

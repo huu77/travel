@@ -1,4 +1,4 @@
-import registerNewUser from '../servers/register.js';
+import registerNewUser from '@servers/auth/register.js';
 
 export const typeDefs = `#graphql
   input UserInput {
