@@ -5,6 +5,8 @@ import fg from 'fast-glob';
 import { EmailAddressResolver, EmailAddressTypeDefinition } from 'graphql-scalars';
 import { dirname, extname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { verifyAccessToken } from './shared/token.js';
+import type { GraphQLContext } from './types/context.js';
 
 type ResolverMap = Record<string, unknown>;
 
@@ -72,6 +74,23 @@ const server = new ApolloServer({
 const port = Number(process.env.PORT) || 4000;
 const { url } = await startStandaloneServer(server, {
   listen: { port },
+  context: async ({ req }): Promise<GraphQLContext> => {
+    const authHeader = req.headers.authorization || '';
+
+    if (authHeader.startsWith('Bearer ')) {
+      const token = authHeader.replace('Bearer ', '').trim();
+      try {
+        const payload = verifyAccessToken(token);
+        return {
+          currentUser: { userId: payload.userId },
+        };
+      } catch (error) {
+        console.warn('Invalid token in request:', error instanceof Error ? error.message : error);
+      }
+    }
+
+    return { currentUser: null };
+  },
 });
 
 async function reloadHasuraRemoteSchema() {

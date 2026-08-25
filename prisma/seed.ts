@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import argon2 from 'argon2';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../src/generated/prisma/client.js';
 
@@ -9,6 +10,7 @@ const adapter = new PrismaPg({
 const prisma = new PrismaClient({ adapter });
 
 const seedEmails = ['an.nguyen@example.com', 'linh.tran@example.com', 'minh.pham@example.com'];
+const SEED_PASSWORD = 'Password123!';
 
 const platformAccountId = '00000000-0000-4000-8000-000000000001';
 const providerAccountId = '00000000-0000-4000-8000-000000000002';
@@ -71,21 +73,21 @@ async function seedCurrencies() {
         name: 'Vietnamese Dong',
         symbol: 'VND',
         decimalDigits: 0,
-        customField: { seed: true },
+        customFields: { seed: true },
       },
       {
         code: 'USD',
         name: 'US Dollar',
         symbol: '$',
         decimalDigits: 2,
-        customField: { seed: true },
+        customFields: { seed: true },
       },
       {
         code: 'SGD',
         name: 'Singapore Dollar',
         symbol: 'S$',
         decimalDigits: 2,
-        customField: { seed: true },
+        customFields: { seed: true },
       },
     ],
     skipDuplicates: true,
@@ -96,14 +98,16 @@ async function main() {
   await clearSeedData();
   await seedCurrencies();
 
+  const hashedPassword = await argon2.hash(SEED_PASSWORD);
+
   const an = await prisma.user.create({
     data: {
       email: 'an.nguyen@example.com',
-      password: 'AnPassword123!',
+      password: hashedPassword,
       firstName: 'An',
       lastName: 'Nguyen',
       phone: '+84901234567',
-      customField: {
+      customFields: {
         seed: true,
         tier: 'gold',
         preferredLanguage: 'vi',
@@ -120,7 +124,7 @@ async function main() {
             passportNumber: 'B1234567',
             passportCountry: 'VN',
             passportExpiryDate: new Date('2030-05-20'),
-            customField: { seed: true, seatPreference: 'aisle' },
+            customFields: { seed: true, seatPreference: 'aisle' },
           },
           {
             type: 'CHILD',
@@ -129,7 +133,7 @@ async function main() {
             dateOfBirth: new Date('2017-08-09'),
             gender: 'male',
             nationality: 'VN',
-            customField: { seed: true, meal: 'child' },
+            customFields: { seed: true, meal: 'child' },
           },
         ],
       },
@@ -140,11 +144,11 @@ async function main() {
   const linh = await prisma.user.create({
     data: {
       email: 'linh.tran@example.com',
-      password: 'LinhPassword123!',
+      password: hashedPassword,
       firstName: 'Linh',
       lastName: 'Tran',
       phone: '+84987654321',
-      customField: {
+      customFields: {
         seed: true,
         tier: 'silver',
         preferredLanguage: 'en',
@@ -161,7 +165,7 @@ async function main() {
             passportNumber: 'C7654321',
             passportCountry: 'VN',
             passportExpiryDate: new Date('2031-01-15'),
-            customField: { seed: true, seatPreference: 'window' },
+            customFields: { seed: true, seatPreference: 'window' },
           },
         ],
       },
@@ -172,11 +176,11 @@ async function main() {
   const minh = await prisma.user.create({
     data: {
       email: 'minh.pham@example.com',
-      password: 'MinhPassword123!',
+      password: hashedPassword,
       firstName: 'Minh',
       lastName: 'Pham',
       phone: '+84922334455',
-      customField: {
+      customFields: {
         seed: true,
         tier: 'standard',
         preferredLanguage: 'vi',
@@ -190,7 +194,7 @@ async function main() {
             dateOfBirth: new Date('1995-06-02'),
             gender: 'male',
             nationality: 'VN',
-            customField: { seed: true },
+            customFields: { seed: true },
           },
           {
             type: 'INFANT',
@@ -199,7 +203,7 @@ async function main() {
             dateOfBirth: new Date('2025-01-18'),
             gender: 'female',
             nationality: 'VN',
-            customField: { seed: true, requiresBassinet: true },
+            customFields: { seed: true, requiresBassinet: true },
           },
         ],
       },
@@ -215,7 +219,7 @@ async function main() {
       status: 'CONFIRMED',
       totalAmount: '3850000',
       currency: 'VND',
-      customField: {
+      customFields: {
         seed: true,
         route: 'SGN-HAN',
         airline: 'Vietnam Airlines',
@@ -226,7 +230,7 @@ async function main() {
       bookingPassengers: {
         create: an.passengers.map((passenger) => ({
           passengerId: passenger.passengerId,
-          customField: {
+          customFields: {
             seed: true,
             snapshotName: `${passenger.firstName} ${passenger.lastName}`,
           },
@@ -243,7 +247,7 @@ async function main() {
       status: 'PENDING',
       totalAmount: '420.50',
       currency: 'USD',
-      customField: {
+      customFields: {
         seed: true,
         route: 'SGN-SIN',
         airline: 'Singapore Airlines',
@@ -254,7 +258,7 @@ async function main() {
       bookingPassengers: {
         create: linh.passengers.map((passenger) => ({
           passengerId: passenger.passengerId,
-          customField: {
+          customFields: {
             seed: true,
             snapshotName: `${passenger.firstName} ${passenger.lastName}`,
           },
@@ -271,7 +275,7 @@ async function main() {
       status: 'CANCELLED',
       totalAmount: '2150000',
       currency: 'VND',
-      customField: {
+      customFields: {
         seed: true,
         route: 'HAN-DAD',
         airline: 'Vietjet Air',
@@ -281,7 +285,7 @@ async function main() {
       bookingPassengers: {
         create: minh.passengers.map((passenger) => ({
           passengerId: passenger.passengerId,
-          customField: {
+          customFields: {
             seed: true,
             snapshotName: `${passenger.firstName} ${passenger.lastName}`,
           },
@@ -300,7 +304,7 @@ async function main() {
       currency: 'VND',
       provider: 'stripe',
       providerTransactionId: 'pi_seed_1001',
-      customField: { seed: true, paymentMethod: 'card' },
+      customFields: { seed: true, paymentMethod: 'card' },
       entries: {
         create: [
           {
@@ -309,7 +313,7 @@ async function main() {
             direction: 'DEBIT',
             amount: '3850000',
             currency: 'VND',
-            customField: { seed: true, memo: 'Customer payment' },
+            customFields: { seed: true, memo: 'Customer payment' },
           },
           {
             accountType: 'PLATFORM',
@@ -317,7 +321,7 @@ async function main() {
             direction: 'CREDIT',
             amount: '3850000',
             currency: 'VND',
-            customField: { seed: true, memo: 'Platform received payment' },
+            customFields: { seed: true, memo: 'Platform received payment' },
           },
         ],
       },
@@ -334,7 +338,7 @@ async function main() {
       currency: 'USD',
       provider: 'stripe',
       providerTransactionId: 'pi_seed_1002',
-      customField: { seed: true, paymentMethod: 'bank_transfer' },
+      customFields: { seed: true, paymentMethod: 'bank_transfer' },
       entries: {
         create: [
           {
@@ -343,7 +347,7 @@ async function main() {
             direction: 'DEBIT',
             amount: '420.50',
             currency: 'USD',
-            customField: { seed: true, memo: 'Awaiting settlement' },
+            customFields: { seed: true, memo: 'Awaiting settlement' },
           },
           {
             accountType: 'PROVIDER',
@@ -351,7 +355,7 @@ async function main() {
             direction: 'CREDIT',
             amount: '420.50',
             currency: 'USD',
-            customField: { seed: true, memo: 'Provider receivable' },
+            customFields: { seed: true, memo: 'Provider receivable' },
           },
         ],
       },
@@ -368,7 +372,7 @@ async function main() {
       currency: 'VND',
       provider: 'stripe',
       providerTransactionId: 're_seed_1003',
-      customField: { seed: true, refundReason: 'Cancelled booking' },
+      customFields: { seed: true, refundReason: 'Cancelled booking' },
       entries: {
         create: [
           {
@@ -377,7 +381,7 @@ async function main() {
             direction: 'DEBIT',
             amount: '2150000',
             currency: 'VND',
-            customField: { seed: true, memo: 'Platform issued refund' },
+            customFields: { seed: true, memo: 'Platform issued refund' },
           },
           {
             accountType: 'USER',
@@ -385,7 +389,7 @@ async function main() {
             direction: 'CREDIT',
             amount: '2150000',
             currency: 'VND',
-            customField: { seed: true, memo: 'Customer refund' },
+            customFields: { seed: true, memo: 'Customer refund' },
           },
         ],
       },
