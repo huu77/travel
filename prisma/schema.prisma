@@ -64,6 +64,10 @@ model User {
   lastName  String?
   phone     String?
 
+  passportNumber     String?
+  passportCountry    String?
+  passportExpiryDate DateTime?
+
   customFields Json?
 
   passengers   Passenger[]

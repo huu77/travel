@@ -148,6 +148,9 @@ async function main() {
       firstName: 'An',
       lastName: 'Nguyen',
       phone: '+84901234567',
+      passportNumber: 'B1234567',
+      passportCountry: 'VN',
+      passportExpiryDate: new Date('2030-05-20'),
       customFields: {
         seed: true,
         tier: 'gold',
@@ -189,6 +192,9 @@ async function main() {
       firstName: 'Linh',
       lastName: 'Tran',
       phone: '+84987654321',
+      passportNumber: 'C7654321',
+      passportCountry: 'VN',
+      passportExpiryDate: new Date('2031-01-15'),
       customFields: {
         seed: true,
         tier: 'silver',
@@ -221,6 +227,9 @@ async function main() {
       firstName: 'Minh',
       lastName: 'Pham',
       phone: '+84922334455',
+      passportNumber: 'D9988776',
+      passportCountry: 'VN',
+      passportExpiryDate: new Date('2032-10-10'),
       customFields: {
         seed: true,
         tier: 'standard',

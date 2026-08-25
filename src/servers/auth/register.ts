@@ -9,6 +9,9 @@ interface RegisterInput {
   firstName?: string;
   lastName?: string;
   phone?: string;
+  passportNumber?: string;
+  passportCountry?: string;
+  passportExpiryDate?: Date | string;
 }
 
 type UserWithoutPassword = Omit<User, 'password'>;
@@ -38,6 +41,9 @@ const createNewUser = async (input: RegisterInput): Promise<UserWithoutPassword>
     firstName: input.firstName ?? null,
     lastName: input.lastName ?? null,
     phone: input.phone ?? null,
+    passportNumber: input.passportNumber ?? null,
+    passportCountry: input.passportCountry ?? null,
+    passportExpiryDate: input.passportExpiryDate ? new Date(input.passportExpiryDate) : null,
   };
 
   const { password, ...newUser } = await prisma.user.create({

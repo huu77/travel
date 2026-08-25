@@ -7,6 +7,9 @@ export const typeDefs = `#graphql
     firstName: String
     lastName: String
     phone: String
+    passportNumber: String
+    passportCountry: String
+    passportExpiryDate: DateTime
   }
 
   type User {
@@ -15,6 +18,9 @@ export const typeDefs = `#graphql
     firstName: String
     lastName: String
     phone: String
+    passportNumber: String
+    passportCountry: String
+    passportExpiryDate: DateTime
     createdAt: String
     updatedAt: String
   }
