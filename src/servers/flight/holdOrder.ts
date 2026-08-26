@@ -1,11 +1,11 @@
 import {
-  BookingPassengerSnapshot,
-  FlightBookingSnapshot,
   Gender,
   PassengerTitle,
-  ProviderHoldOrderResponse,
   type HoldOrderInput,
   type HoldOrderResult,
+  type BookingPassengerSnapshot,
+  type FlightBookingSnapshot,
+  type ProviderHoldOrderResponse,
 } from '@/types/booking.js';
 import '@/servers/duffel/index.js';
 import { prisma } from '@/prisma.js';
@@ -18,22 +18,8 @@ import {
   User,
 } from '@/generated/prisma/client.js';
 import { FlightProviderRegistry } from '@/shared/provider.js';
-import partition from 'lodash/partition.js';
 
-interface SaveBookingParams {
-  userId: string;
-  provider: string;
-  providerBookingId: string;
-  totalAmount: string;
-  currency: string;
-  passengers: Partial<Passenger>[];
-  customFields: {
-    flightSnapshot: FlightBookingSnapshot;
-    passengerSnapshots: BookingPassengerSnapshot[];
-  };
-}
-
-const checkUser = async (userId: string): Promise<Partial<User>> => {
+const checkUser = async (userId: string): Promise<Pick<User, 'userId' | 'email' | 'phone'>> => {
   const user = await prisma.user.findFirst({
     where: {
       userId,
@@ -47,6 +33,7 @@ const checkUser = async (userId: string): Promise<Partial<User>> => {
   });
 
   if (!user) {
+    console.error(`❌ [HoldOrder] Không tìm thấy User ID: ${userId}`);
     throw new GraphQLError('[HoldOrder] User not found', {
       extensions: { code: 'UNAUTHENTICATED', http: { status: 401 } },
     });
@@ -66,25 +53,32 @@ const checkProvider = async (providerId: string) => {
       code: true,
     },
   });
+
   if (!provider) {
+    console.error(`❌ [HoldOrder] Không tìm thấy Provider: ${providerId}`);
     throw new GraphQLError('Provider not found', {
-      extensions: { code: 'NOTFOUND', http: { status: 400 } },
+      extensions: { code: 'NOT_FOUND', http: { status: 400 } },
     });
   }
 
   return provider;
 };
 
-const loadPassengersInSystem = async ({
+async function loadPassengersInSystem({
   passengerIds,
+  userId,
 }: {
   passengerIds: string[];
-}): Promise<Partial<Passenger>[]> => {
-  const passengers: Partial<Passenger>[] = await prisma.passenger.findMany({
+  userId?: string;
+}): Promise<Partial<Passenger>[]> {
+  const uniquePassengerIds = [...new Set(passengerIds)];
+
+  const passengers = await prisma.passenger.findMany({
     where: {
       passengerId: {
-        in: passengerIds,
+        in: uniquePassengerIds,
       },
+      ...(userId ? { userId } : {}),
       deletedAt: null,
     },
     select: {
@@ -101,23 +95,26 @@ const loadPassengersInSystem = async ({
     },
   });
 
-  if (passengerIds.length !== passengers.length) {
-    const [_, passengerIdsNotExits] = partition(
-      passengers,
-      ({ passengerId }: { passengerId: string }) => passengerIds.includes(passengerId),
-    );
+  if (uniquePassengerIds.length !== passengers.length) {
+    const foundIds = new Set(passengers.map((p) => p.passengerId));
+    const missingPassengerIds = uniquePassengerIds.filter((id) => !foundIds.has(id));
 
     console.error(
-      `[HoldOrder] Have passenger don't register before hold orde`,
-      passengerIdsNotExits,
+      `❌ [HoldOrder] Phát hiện hành khách chưa đăng ký hoặc không thuộc quyền sở hữu:`,
+      missingPassengerIds,
     );
+
     throw new GraphQLError(`[HoldOrder] Have passenger don't register before hold order`, {
-      extensions: { code: '', http: { status: 400 } },
+      extensions: {
+        code: 'PASSENGER_NOT_FOUND',
+        http: { status: 400 },
+        missingPassengerIds,
+      },
     });
   }
 
   return passengers;
-};
+}
 
 const buildFlightSnapshot = (
   offerId: string,
@@ -137,6 +134,7 @@ const buildPassengerSnapshots = (
 ): BookingPassengerSnapshot[] => {
   return dbPassengers.map((p, index) => {
     const isFemale = p.gender?.toLowerCase() === Gender.FEMALE;
+
     return {
       passengerId: p.passengerId || '',
       duffelPassengerId: offerPassengers[index]?.id ?? null,
@@ -161,6 +159,19 @@ const buildPassengerSnapshots = (
     };
   });
 };
+
+interface SaveBookingParams {
+  userId: string;
+  provider: string;
+  providerBookingId: string;
+  totalAmount: string;
+  currency: string;
+  passengers: Partial<Passenger>[];
+  customFields: {
+    flightSnapshot: FlightBookingSnapshot;
+    passengerSnapshots: BookingPassengerSnapshot[];
+  };
+}
 
 const saveBooking = async ({
   userId,
@@ -202,39 +213,67 @@ export const createHoldOrderViaProvider = async (
   userId: string,
   input: HoldOrderInput,
 ): Promise<HoldOrderResult> => {
+  const startTime = Date.now();
+
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log('🎟️ [FlightHoldOrder] Bắt đầu quy trình tạo đơn Giữ Chỗ');
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  console.log('📥 Tham số đầu vào:', JSON.stringify(input, null, 2));
+  console.log('📥 [Bước 1/5] Tham số đầu vào:', {
+    userId,
+    provider: input.providerId || 'duffel (default)',
+    offerId: input.offerId,
+    passengerCount: input.passengerIds?.length || 0,
+  });
 
   const provider = await checkProvider(input.providerId);
   const providerCode = provider.code.trim().toLowerCase();
   const providerRegister = FlightProviderRegistry.get(providerCode);
+  console.log(`🔌 [Bước 2/5] Đã kết nối Provider: [${providerCode.toUpperCase()}]`);
 
+  console.log(`🔍 [Bước 2/5] Đang kiểm tra thông tin User và Offer (${input.offerId})...`);
   const [user, offer] = await Promise.all([
     checkUser(userId),
     providerRegister.getOfferDetails(input.offerId),
   ]);
 
-  console.log('[HoldOrder] user', JSON.stringify(user, null, 2));
-  console.log('[HoldOrder] offer', JSON.stringify(offer, null, 2));
+  console.log(`👤 [Bước 2/5] Người đặt vé: ${user.email} (Phone: ${user.phone || 'N/A'})`);
+  console.log(
+    `✈️ [Bước 2/5] Vé hợp lệ! Hãng: ${offer.owner?.name || 'Airline'} | Tổng tiền: ${offer.total_amount} ${offer.total_currency} | Hạn giữ giá: ${offer.expires_at}`,
+  );
 
+  console.log('👥 [Bước 3/5] Đang tải & xác thực danh bạ hành khách trong CSDL...');
   const passengers = await loadPassengersInSystem({
     passengerIds: input.passengerIds,
+    userId,
   });
+  console.log(
+    `✅ [Bước 3/5] Xác thực thành công ${passengers.length} hành khách:`,
+    passengers
+      .map((p) => `${p.firstName} ${p.lastName} (${p.passportNumber || 'No Passport'})`)
+      .join(', '),
+  );
 
   let holdOrderResponse: ProviderHoldOrderResponse | null = null;
 
   try {
+    console.log(`🚀 [Bước 4/5] Gửi yêu cầu giữ chỗ sang [${providerCode.toUpperCase()}] API...`);
+    const holdStartTime = Date.now();
     holdOrderResponse = await providerRegister.createHoldOrder({
       offerId: input.offerId,
       passengers,
     });
+    console.log(
+      `✅ [Bước 4/5] Provider giữ chỗ thành công trong ${Date.now() - holdStartTime}ms! Mã PNR: ${holdOrderResponse.bookingReference} | Order ID: ${holdOrderResponse.orderId}`,
+    );
 
+    console.log('📸 [Bước 5/5] Đóng gói Snapshot chuyến bay & hành khách bất biến...');
     const flightSnapshot = buildFlightSnapshot(input.offerId, holdOrderResponse);
     const passengerSnapshots = buildPassengerSnapshots(passengers, offer.passengers || []);
     const customFields = { flightSnapshot, passengerSnapshots };
 
+    console.log(
+      '💾 [Bước 5/5] Lưu Booking & BookingPassengers vào PostgreSQL (Prisma $transaction)...',
+    );
     const createdBooking = await saveBooking({
       userId,
       provider: providerCode,
@@ -244,6 +283,20 @@ export const createHoldOrderViaProvider = async (
       passengers,
       customFields,
     });
+
+    const totalDuration = Date.now() - startTime;
+    console.log('\n🎉 ====================================================');
+    console.log('🎉 [FlightHoldOrder] TẠO ĐƠN GIỮ CHỖ HOÀN TẤT THÀNH CÔNG!');
+    console.log('====================================================');
+    console.log(`⏱️ Tổng thời gian thực thi: ${totalDuration}ms`);
+    console.log(`📦 Booking ID (PostgreSQL): ${createdBooking.bookingId}`);
+    console.log(`🔖 Mã PNR Hãng bay (Booking Reference): ${holdOrderResponse.bookingReference}`);
+    console.log(
+      `⏳ Hạn thanh toán (Payment Required By): ${holdOrderResponse.paymentRequiredBy || 'N/A'}`,
+    );
+    console.log(`💰 Tổng tiền: ${createdBooking.totalAmount} ${createdBooking.currency}`);
+    console.log(`📊 Trạng thái đơn: ${createdBooking.status}`);
+    console.log('====================================================\n');
 
     return {
       bookingId: createdBooking.bookingId,
@@ -261,23 +314,31 @@ export const createHoldOrderViaProvider = async (
       createdAt: createdBooking.createdAt.toISOString(),
     };
   } catch (error: any) {
+    const totalDuration = Date.now() - startTime;
+    console.error('\n❌ ====================================================');
+    console.error('❌ [FlightHoldOrder Error] XẢY RA LỖI TRONG QUY TRÌNH GIỮ CHỖ');
+    console.error('====================================================');
+    console.error(`⏱️ Thời gian trước khi lỗi: ${totalDuration}ms`);
+    console.error(`🔴 Thông điệp lỗi: ${error.message}`);
+
     if (holdOrderResponse?.orderId && providerRegister.cancelOrder) {
       console.warn(
-        `[Saga Rollback] Lỗi lưu DB sau khi giữ chỗ. Đang tự động hủy đơn ${holdOrderResponse.orderId} trên Provider...`,
+        `⚠️ [Saga Rollback] Lỗi lưu DB sau khi đã giữ chỗ. Đang tự động hủy đơn ${holdOrderResponse.orderId} trên Provider...`,
       );
 
       try {
         await providerRegister.cancelOrder(holdOrderResponse.orderId);
         console.log(
-          `[Saga Rollback] Đã hủy thành công đơn ${holdOrderResponse.orderId} trên Provider!`,
+          `✅ [Saga Rollback] Đã hủy thành công đơn ${holdOrderResponse.orderId} trên Provider! Không để lại vé rác.`,
         );
       } catch (cancelError: any) {
         console.error(
-          `[Saga Rollback CRITICAL] Không thể tự động hủy đơn ${holdOrderResponse.orderId}:`,
+          `🚨 [Saga Rollback CRITICAL] Không thể tự động hủy đơn ${holdOrderResponse.orderId}:`,
           cancelError.message,
         );
       }
     }
+    console.error('====================================================\n');
 
     throw error;
   }

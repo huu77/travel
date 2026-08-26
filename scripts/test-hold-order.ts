@@ -47,7 +47,9 @@ async function testHoldOrderFlow() {
 
   // 3. Thực hiện Giữ Chỗ (Hold Order)
   console.log('\n🚀 Đang gửi lệnh Giữ Chỗ sang Duffel và Lưu Database...');
+  const duffelProvider = await prisma.provider.findFirst({ where: { code: 'duffel' } });
   const holdResult = await createHoldOrderViaProvider(user.userId, {
+    providerId: duffelProvider!.providerId,
     offerId: selectedOffer.offerId,
     passengerIds: [adultPassenger.passengerId],
   });

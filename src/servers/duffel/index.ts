@@ -4,7 +4,7 @@ import type { HoldOrderProviderParams, ProviderHoldOrderResponse } from '@/types
 import { searchFlights } from './search.js';
 import { createDuffelHoldOrder } from './holdOrder.js';
 import { getDuffelOffer } from './offer.js';
-// import { cancelDuffelOrder } from './cancelOrder.js';
+import { cancelDuffelOrder } from './cancelOrder.js';
 
 @FlightProvider('duffel')
 class DuffelFlightProvider implements IFlightProvider {
@@ -22,9 +22,9 @@ class DuffelFlightProvider implements IFlightProvider {
     return await createDuffelHoldOrder(params);
   }
 
-  // async cancelOrder(providerBookingId: string): Promise<boolean> {
-  //   return await cancelDuffelOrder(providerBookingId);
-  // }
+  async cancelOrder(providerBookingId: string): Promise<boolean> {
+    return await cancelDuffelOrder(providerBookingId);
+  }
 }
 
 const duffelFlightProvider = new DuffelFlightProvider();
