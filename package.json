@@ -7,14 +7,6 @@
     "node": ">=20.0.0",
     "pnpm": "10.33.0"
   },
-  "imports": {
-    "@/*": "./src/*",
-    "@servers/*": "./src/servers/*",
-    "@handlers/*": "./src/handlers/*",
-    "@shared/*": "./src/shared/*",
-    "@types/*": "./src/types/*",
-    "@generated/*": "./src/generated/*"
-  },
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "prisma generate && tsc",
