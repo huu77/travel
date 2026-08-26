@@ -213,7 +213,7 @@ export const createHoldOrderViaProvider = async (
   userId: string,
   input: HoldOrderInput,
 ): Promise<HoldOrderResult> => {
-  const startTime = Date.now();
+  console.time('⏱️ [FlightHoldOrder] Thời gian thực thi');
 
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log('🎟️ [FlightHoldOrder] Bắt đầu quy trình tạo đơn Giữ Chỗ');
@@ -257,13 +257,14 @@ export const createHoldOrderViaProvider = async (
 
   try {
     console.log(`🚀 [Bước 4/5] Gửi yêu cầu giữ chỗ sang [${providerCode.toUpperCase()}] API...`);
-    const holdStartTime = Date.now();
+    console.time('⏱️ [FlightHoldOrder] Provider giữ chỗ');
     holdOrderResponse = await providerRegister.createHoldOrder({
       offerId: input.offerId,
       passengers,
     });
+    console.timeEnd('⏱️ [FlightHoldOrder] Provider giữ chỗ');
     console.log(
-      `✅ [Bước 4/5] Provider giữ chỗ thành công trong ${Date.now() - holdStartTime}ms! Mã PNR: ${holdOrderResponse.bookingReference} | Order ID: ${holdOrderResponse.orderId}`,
+      `✅ [Bước 4/5] Mã PNR: ${holdOrderResponse.bookingReference} | Order ID: ${holdOrderResponse.orderId}`,
     );
 
     console.log('📸 [Bước 5/5] Đóng gói Snapshot chuyến bay & hành khách bất biến...');
@@ -284,11 +285,10 @@ export const createHoldOrderViaProvider = async (
       customFields,
     });
 
-    const totalDuration = Date.now() - startTime;
     console.log('\n🎉 ====================================================');
     console.log('🎉 [FlightHoldOrder] TẠO ĐƠN GIỮ CHỖ HOÀN TẤT THÀNH CÔNG!');
     console.log('====================================================');
-    console.log(`⏱️ Tổng thời gian thực thi: ${totalDuration}ms`);
+    console.timeEnd('⏱️ [FlightHoldOrder] Thời gian thực thi');
     console.log(`📦 Booking ID (PostgreSQL): ${createdBooking.bookingId}`);
     console.log(`🔖 Mã PNR Hãng bay (Booking Reference): ${holdOrderResponse.bookingReference}`);
     console.log(
@@ -314,11 +314,10 @@ export const createHoldOrderViaProvider = async (
       createdAt: createdBooking.createdAt.toISOString(),
     };
   } catch (error: any) {
-    const totalDuration = Date.now() - startTime;
     console.error('\n❌ ====================================================');
     console.error('❌ [FlightHoldOrder Error] XẢY RA LỖI TRONG QUY TRÌNH GIỮ CHỖ');
     console.error('====================================================');
-    console.error(`⏱️ Thời gian trước khi lỗi: ${totalDuration}ms`);
+    console.timeEnd('⏱️ [FlightHoldOrder] Thời gian thực thi');
     console.error(`🔴 Thông điệp lỗi: ${error.message}`);
 
     if (holdOrderResponse?.orderId && providerRegister.cancelOrder) {
