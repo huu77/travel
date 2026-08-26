@@ -106,84 +106,105 @@ const { url } = await startStandaloneServer(server, {
   },
 });
 
-async function reloadHasuraRemoteSchema() {
+async function reloadHasuraRemoteSchema(retries = 3, delayMs = 3000) {
   const hasuraMetadataUrl = env.HASURA_METADATA_URL;
   const adminSecret = env.HASURA_ADMIN_SECRET;
   const remoteSchemaName = env.HASURA_REMOTE_SCHEMA_NAME;
   const graphqlServerUrl = env.HASURA_GRAPHQL_REMOTE_URL;
 
-  try {
-    const response = await fetch(hasuraMetadataUrl, {
-      method: 'POST',
-      headers: {
-        'x-hasura-admin-secret': adminSecret,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        type: 'reload_remote_schema',
-        args: {
-          name: remoteSchemaName,
-        },
-      }),
-    });
-
-    const result = (await response.json()) as Record<string, unknown>;
-
-    const isNotExistsError = result.code === 'not-exists';
-    if (isNotExistsError) {
-      console.log(
-        `[Hasura] Chưa thấy Remote Schema "${remoteSchemaName}", đang tự động đăng ký mới...`,
-      );
-      const addResponse = await fetch(hasuraMetadataUrl, {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const response = await fetch(hasuraMetadataUrl, {
         method: 'POST',
         headers: {
           'x-hasura-admin-secret': adminSecret,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          type: 'add_remote_schema',
+          type: 'reload_remote_schema',
           args: {
             name: remoteSchemaName,
-            definition: {
-              url: graphqlServerUrl,
-              timeout_seconds: 60,
-              forward_client_headers: true,
-            },
           },
         }),
       });
 
-      const addResult = (await addResponse.json()) as Record<string, unknown>;
-      const isAddExistsError = !addResponse.ok || Boolean(addResult.error);
-      if (isAddExistsError) {
-        console.error('\n❌ [Hasura Add Remote Schema Failed]');
-        console.error('- Details:', JSON.stringify(addResult, null, 2));
+      const result = (await response.json()) as Record<string, unknown>;
+
+      const isNotExistsError = result.code === 'not-exists';
+      if (isNotExistsError) {
+        console.log(
+          `[Hasura] Chưa thấy Remote Schema "${remoteSchemaName}", đang thử đăng ký mới (Lần ${attempt}/${retries})...`,
+        );
+        const addResponse = await fetch(hasuraMetadataUrl, {
+          method: 'POST',
+          headers: {
+            'x-hasura-admin-secret': adminSecret,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            type: 'add_remote_schema',
+            args: {
+              name: remoteSchemaName,
+              definition: {
+                url: graphqlServerUrl,
+                timeout_seconds: 60,
+                forward_client_headers: true,
+              },
+            },
+          }),
+        });
+
+        const addResult = (await addResponse.json()) as Record<string, unknown>;
+        const isAddExistsError = !addResponse.ok || Boolean(addResult.error);
+        if (isAddExistsError) {
+          if (attempt < retries) {
+            console.log(
+              `⚠️ Hasura chưa gọi tới được ${graphqlServerUrl}, thử lại sau ${delayMs / 1000}s...`,
+            );
+            await new Promise((r) => setTimeout(r, delayMs));
+            continue;
+          }
+          console.error('\n❌ [Hasura Add Remote Schema Failed]');
+          console.error('- Details:', JSON.stringify(addResult, null, 2));
+          return;
+        }
+
+        console.log(
+          `\n🎉 [Hasura Auto-Registered] Đã tự động thêm Remote Schema "${remoteSchemaName}" vào Hasura!\n`,
+        );
         return;
       }
 
-      console.log(
-        `\n🎉 [Hasura Auto-Registered] Đã tự động thêm Remote Schema "${remoteSchemaName}" vào Hasura!\n`,
-      );
-      return;
+      if (!response.ok || Boolean(result.error) || Boolean(result.code)) {
+        if (attempt < retries) {
+          await new Promise((r) => setTimeout(r, delayMs));
+          continue;
+        }
+        console.error('\n❌ [Hasura Reload Failed]');
+        console.error('- Details:', JSON.stringify(result, null, 2));
+      } else {
+        console.log(
+          `\n🔄 [Hasura Synced] Đã tự động reload Remote Schema "${remoteSchemaName}" thành công!\n`,
+        );
+        return;
+      }
+    } catch (error: unknown) {
+      if (attempt < retries) {
+        await new Promise((r) => setTimeout(r, delayMs));
+        continue;
+      }
+      const message = error instanceof Error ? error.message : String(error);
+      console.error('\n⚠️ [Hasura Connection Error]');
+      console.error(`- Không thể kết nối tới Hasura tại: ${hasuraMetadataUrl}`);
+      console.error(`- Lỗi: ${message}\n`);
     }
-
-    if (!response.ok || Boolean(result.error) || Boolean(result.code)) {
-      console.error('\n❌ [Hasura Reload Failed]');
-      console.error('- Details:', JSON.stringify(result, null, 2));
-    } else {
-      console.log(
-        `\n🔄 [Hasura Synced] Đã tự động reload Remote Schema "${remoteSchemaName}" thành công!\n`,
-      );
-    }
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error('\n⚠️ [Hasura Connection Error]');
-    console.error(`- Không thể kết nối tới Hasura tại: ${hasuraMetadataUrl}`);
-    console.error(`- Lỗi: ${message}\n`);
   }
 }
 
-await reloadHasuraRemoteSchema();
-
 console.log(`Server ready at ${url}`);
 console.log(`Loaded handlers: ${loadedHandlers.join(', ') || 'none'}`);
+
+// Run Hasura sync in background after server is live
+setTimeout(() => {
+  reloadHasuraRemoteSchema().catch((err) => console.error('Hasura sync error:', err));
+}, 2000);
