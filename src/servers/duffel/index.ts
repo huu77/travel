@@ -1,24 +1,31 @@
 import { FlightProvider } from '@/shared/provider.js';
 import type { FlightSearchInput, FlightSearchResult, IFlightProvider } from '@/types/flight.js';
+import type { HoldOrderProviderParams, ProviderHoldOrderResponse } from '@/types/booking.js';
 import { searchFlights } from './search.js';
+import { createDuffelHoldOrder } from './holdOrder.js';
+import { getDuffelOffer } from './offer.js';
+// import { cancelDuffelOrder } from './cancelOrder.js';
 
 @FlightProvider('duffel')
-export class DuffelFlightProvider implements IFlightProvider {
+class DuffelFlightProvider implements IFlightProvider {
   readonly providerCode = 'duffel';
 
   async searchFlights(input: FlightSearchInput): Promise<FlightSearchResult> {
     return await searchFlights(input);
   }
 
-  // 🎟️ 2. Giữ chỗ (Hold Order) - Sẽ ủy thác sang ./holdOrder.js
-  // async createHoldOrder(offerId: string, passengers: unknown[]) {
-  //   return await createHoldOrder(offerId, passengers);
-  // }
+  async getOfferDetails(offerId: string): Promise<any> {
+    return await getDuffelOffer(offerId);
+  }
 
-  // ❌ 3. Hủy giữ chỗ - Sẽ ủy thác sang ./cancelOrder.js
-  // async cancelOrder(providerBookingId: string) {
-  //   return await cancelOrder(providerBookingId);
+  async createHoldOrder(params: HoldOrderProviderParams): Promise<ProviderHoldOrderResponse> {
+    return await createDuffelHoldOrder(params);
+  }
+
+  // async cancelOrder(providerBookingId: string): Promise<boolean> {
+  //   return await cancelDuffelOrder(providerBookingId);
   // }
 }
 
-export * from './search.js';
+const duffelFlightProvider = new DuffelFlightProvider();
+export default duffelFlightProvider;

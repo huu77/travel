@@ -66,7 +66,11 @@ export function transformSearchResponse(data: any): FlightSearchResult {
         name: slice.destination.name,
         cityName: slice.destination.city_name ?? null,
       },
-      departureDate: slice.departure_date,
+      departureDate:
+        slice.departure_date ||
+        slice.segments?.[0]?.departing_at?.split('T')[0] ||
+        slice.segments?.[0]?.departing_at ||
+        '',
       duration: slice.duration,
       segments: (slice.segments || []).map((seg: any) => ({
         origin: {

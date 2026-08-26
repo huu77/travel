@@ -1,3 +1,5 @@
+import type { HoldOrderProviderParams, ProviderHoldOrderResponse } from './booking.js';
+
 export enum CabinClass {
   ECONOMY = 'economy',
   PREMIUM_ECONOMY = 'premium_economy',
@@ -72,6 +74,7 @@ export interface FlightSearchResult {
 export interface IFlightProvider {
   readonly providerCode: string;
   searchFlights(input: FlightSearchInput): Promise<FlightSearchResult>;
-  createHoldOrder?(offerId: string, passengers: unknown[]): Promise<unknown>;
+  getOfferDetails(offerId: string): Promise<any>;
+  createHoldOrder(params: HoldOrderProviderParams): Promise<ProviderHoldOrderResponse>;
   cancelOrder?(providerBookingId: string): Promise<boolean>;
 }

@@ -1,5 +1,6 @@
 import { FlightProviderRegistry } from '@/shared/provider.js';
 import type { FlightSearchInput, FlightSearchResult } from '@/types/flight.js';
+import '@/servers/duffel/index.js';
 
 const DEFAULT_EMPTY_FLIGHT_RESULT: FlightSearchResult = {
   offerRequestId: '',
@@ -10,7 +11,7 @@ const DEFAULT_EMPTY_FLIGHT_RESULT: FlightSearchResult = {
 export const searchFlightsViaProvider = async (
   input: FlightSearchInput,
 ): Promise<FlightSearchResult> => {
-  const providerCode = input.provider?.trim().toLowerCase();
+  const providerCode = input.provider?.trim().toLowerCase() || 'duffel';
 
   try {
     const provider = FlightProviderRegistry.get(providerCode);
