@@ -208,7 +208,7 @@ export const createHoldOrderViaProvider = async (
   console.log('📥 Tham số đầu vào:', JSON.stringify(input, null, 2));
 
   const provider = await checkProvider(input.providerId);
-  const providerCode = provider.code.trim().toUpperCase();
+  const providerCode = provider.code.trim().toLowerCase();
   const providerRegister = FlightProviderRegistry.get(providerCode);
 
   const [user, offer] = await Promise.all([
