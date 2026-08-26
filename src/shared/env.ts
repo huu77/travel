@@ -14,7 +14,7 @@ export const env = {
   HASURA_ADMIN_SECRET: process.env.HASURA_ADMIN_SECRET || 'hasura-secret',
   HASURA_REMOTE_SCHEMA_NAME: process.env.HASURA_REMOTE_SCHEMA_NAME || 'travel_server',
   HASURA_GRAPHQL_REMOTE_URL:
-    process.env.HASURA_GRAPHQL_REMOTE_URL || 'http://host.docker.internal:4000/',
+    process.env.HASURA_GRAPHQL_REMOTE_URL || 'https://travel-2f40.onrender.com/',
   HASURA_SOURCE_NAME: process.env.HASURA_SOURCE_NAME || 'travel',
 
   // Duffel Flights API

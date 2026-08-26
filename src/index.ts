@@ -81,6 +81,7 @@ const { typeDefs, resolvers, loadedHandlers } = await loadHandlers();
 const server = new ApolloServer({
   typeDefs,
   resolvers,
+  introspection: true,
 });
 
 const port = env.PORT;

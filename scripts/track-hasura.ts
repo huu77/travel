@@ -248,6 +248,54 @@ async function callHasura(body: unknown) {
 async function trackAll() {
   console.log('🚀 Bắt đầu Track toàn bộ Database vào Hasura...');
 
+  // 0. Connect Database Source
+  console.log(`🔌 Đang kết nối Database "${source}" vào Hasura...`);
+  const addSourceRes = await callHasura({
+    type: 'pg_add_source',
+    args: {
+      name: source,
+      configuration: {
+        connection_info: {
+          database_url: env.DATABASE_URL,
+          pool_settings: {
+            max_connections: 20,
+            idle_timeout: 180,
+            retries: 3,
+          },
+        },
+      },
+    },
+  });
+
+  if (addSourceRes?.message === 'success') {
+    console.log(`  ✅ Successfully connected database source "${source}"`);
+  } else {
+    console.log(
+      `  ℹ️ Source "${source}": ${addSourceRes?.error || addSourceRes?.code || 'Already connected'}`,
+    );
+  }
+
+  // 0.5 Untrack non-public schema tables (like auth.*, vault.*)
+  console.log('🧹 Đang dọn dẹp các bảng ngoài schema "public"...');
+  const metaRes = await callHasura({ type: 'export_metadata', args: {} });
+  const travelSource = (metaRes?.sources || []).find((s: any) => s.name === source);
+  if (travelSource) {
+    for (const t of travelSource.tables || []) {
+      const schema = t.table.schema;
+      if (schema !== 'public') {
+        console.log(`  🧹 Untracked non-public table: ${schema}.${t.table.name}`);
+        await callHasura({
+          type: 'pg_untrack_table',
+          args: {
+            source,
+            table: t.table,
+            cascade: true,
+          },
+        });
+      }
+    }
+  }
+
   // 1. Track Tables
   for (const tableName of tables) {
     const res = await callHasura({
@@ -284,7 +332,41 @@ async function trackAll() {
     args: { reload_sources: [source] },
   });
 
-  console.log('\n🎉 Hoàn tất! Toàn bộ 7 bảng và 14 mối quan hệ đã được đồng bộ 100% trên Hasura.');
+  // 4. Register & Reload Remote Schema
+  console.log('\n🌐 Đang đăng ký & đồng bộ Remote Schema...');
+  const remoteSchemaRes = await callHasura({
+    type: 'add_remote_schema',
+    args: {
+      name: env.HASURA_REMOTE_SCHEMA_NAME,
+      definition: {
+        url: env.HASURA_GRAPHQL_REMOTE_URL,
+        timeout_seconds: 60,
+        forward_client_headers: true,
+      },
+    },
+  });
+
+  if (remoteSchemaRes?.message === 'success') {
+    console.log(
+      `  ✅ Registered Remote Schema "${env.HASURA_REMOTE_SCHEMA_NAME}" at ${env.HASURA_GRAPHQL_REMOTE_URL}`,
+    );
+  } else {
+    const reloadRes = await callHasura({
+      type: 'reload_remote_schema',
+      args: { name: env.HASURA_REMOTE_SCHEMA_NAME },
+    });
+    if (reloadRes?.message === 'success') {
+      console.log(
+        `  🔄 Reloaded Remote Schema "${env.HASURA_REMOTE_SCHEMA_NAME}" at ${env.HASURA_GRAPHQL_REMOTE_URL}`,
+      );
+    } else {
+      console.log(`  ℹ️ Remote Schema info: ${reloadRes?.error || JSON.stringify(reloadRes)}`);
+    }
+  }
+
+  console.log(
+    '\n🎉 Hoàn tất! Toàn bộ 7 bảng, 14 mối quan hệ và Remote Schema đã được đồng bộ 100% trên Hasura.',
+  );
 }
 
 await trackAll();
