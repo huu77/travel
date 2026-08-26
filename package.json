@@ -3,6 +3,10 @@
   "version": "1.0.0",
   "description": "",
   "type": "module",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": "10.33.0"
+  },
   "imports": {
     "@/*": "./src/*",
     "@servers/*": "./src/servers/*",
