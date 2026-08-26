@@ -12,8 +12,17 @@ const REFRESH_TOKEN_EXPIRES_IN = '7d';
 const privateKeyPath = fileURLToPath(new URL('../keys/private.key', import.meta.url));
 const publicKeyPath = fileURLToPath(new URL('../keys/public.key', import.meta.url));
 
-const PRIVATE_KEY = fs.readFileSync(privateKeyPath, 'utf8');
-const PUBLIC_KEY = fs.readFileSync(publicKeyPath, 'utf8');
+const PRIVATE_KEY = process.env.JWT_PRIVATE_KEY
+  ? process.env.JWT_PRIVATE_KEY.replace(/\\n/g, '\n')
+  : fs.existsSync(privateKeyPath)
+    ? fs.readFileSync(privateKeyPath, 'utf8')
+    : '';
+
+const PUBLIC_KEY = process.env.JWT_PUBLIC_KEY
+  ? process.env.JWT_PUBLIC_KEY.replace(/\\n/g, '\n')
+  : fs.existsSync(publicKeyPath)
+    ? fs.readFileSync(publicKeyPath, 'utf8')
+    : '';
 
 export const generateAccessToken = (userId: string): string => {
   const payload: TokenPayload = {
