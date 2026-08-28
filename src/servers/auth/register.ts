@@ -47,7 +47,23 @@ const createNewUser = async (input: RegisterInput): Promise<UserWithoutPassword>
   };
 
   const { password, ...newUser } = await prisma.user.create({
-    data: userData,
+    data: {
+      ...userData,
+      passengers: {
+        create: [
+          {
+            type: 'ADULT',
+            firstName: input.firstName || 'User',
+            lastName: input.lastName || 'Self',
+            passportNumber: input.passportNumber ?? null,
+            passportCountry: input.passportCountry ?? 'VN',
+            passportExpiryDate: input.passportExpiryDate
+              ? new Date(input.passportExpiryDate)
+              : null,
+          },
+        ],
+      },
+    },
   });
 
   return newUser;

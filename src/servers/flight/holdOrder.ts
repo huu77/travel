@@ -126,6 +126,7 @@ async function loadPassengerByIds(
 export async function loadPassengerByNewData(
   offerPassengers: OfferPassengerInput[],
   txt: Prisma.TransactionClient,
+  userId?: string,
 ): Promise<Passenger[]> {
   if (!offerPassengers || offerPassengers.length === 0) {
     return [];
@@ -174,20 +175,31 @@ export async function loadPassengerByNewData(
   }
 
   if (passengersWithoutId.length > 0) {
-    const createData = passengersWithoutId.map(({ passenger }) => ({
-      userId: passenger.userId,
-      firstName: passenger.firstName,
-      lastName: passenger.lastName,
-      type: passenger.type || PassengerType.ADULT,
-      gender: passenger.gender ?? null,
-      nationality: passenger.nationality ?? null,
-      passportNumber: passenger.passportNumber ?? null,
-      passportCountry: passenger.passportCountry || 'VN',
-      passportExpiryDate: passenger.passportExpiryDate
-        ? new Date(passenger.passportExpiryDate)
-        : null,
-      dateOfBirth: passenger.dateOfBirth ? new Date(passenger.dateOfBirth) : new Date('1992-03-14'),
-    }));
+    const createData = passengersWithoutId.map(({ passenger }) => {
+      const pUserId = userId || passenger.userId;
+      if (!pUserId) {
+        throw new GraphQLError('[HoldOrder] Missing userId for new passenger creation', {
+          extensions: { code: 'BAD_USER_INPUT', http: { status: 400 } },
+        });
+      }
+
+      return {
+        userId: pUserId,
+        firstName: passenger.firstName,
+        lastName: passenger.lastName,
+        type: passenger.type || PassengerType.ADULT,
+        gender: passenger.gender ?? null,
+        nationality: passenger.nationality ?? null,
+        passportNumber: passenger.passportNumber ?? null,
+        passportCountry: passenger.passportCountry || 'VN',
+        passportExpiryDate: passenger.passportExpiryDate
+          ? new Date(passenger.passportExpiryDate)
+          : null,
+        dateOfBirth: passenger.dateOfBirth
+          ? new Date(passenger.dateOfBirth)
+          : new Date('1992-03-14'),
+      };
+    });
 
     const createdPassengers = await txt.passenger.createManyAndReturn({
       data: createData,
@@ -208,7 +220,7 @@ async function loadPassengersInSystem(
     offerPassengers = [],
   }: {
     passengerIds?: string[];
-    userId?: string;
+    userId: string;
     offerPassengers?: OfferPassengerInput[];
   },
   txt: Prisma.TransactionClient,
@@ -217,7 +229,7 @@ async function loadPassengersInSystem(
 
   const shouldLoadPassengerByNewData = offerPassengers.length > 0;
   if (shouldLoadPassengerByNewData) {
-    passengers = await loadPassengerByNewData(offerPassengers, txt);
+    passengers = await loadPassengerByNewData(offerPassengers, txt, userId);
   }
 
   const shouldLoadPassengerById =
