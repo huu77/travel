@@ -76,5 +76,5 @@ export interface IFlightProvider {
   searchFlights(input: FlightSearchInput): Promise<FlightSearchResult>;
   getOfferDetails(offerId: string): Promise<any>;
   createHoldOrder(params: HoldOrderProviderParams): Promise<ProviderHoldOrderResponse>;
-  cancelOrder?(providerBookingId: string): Promise<boolean>;
+  cancelOrder(providerBookingId: string): Promise<boolean>;
 }
