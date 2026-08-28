@@ -336,13 +336,15 @@ export const createHoldOrderViaProvider = async (
   console.time('⏱️ [FlightHoldOrder] Thời gian thực thi');
 
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  console.log('🎟️ [FlightHoldOrder] Bắt đầu quy trình tạo đơn Giữ Chỗ');
+  console.log(
+    `🎟️ [FlightHoldOrder] Bắt đầu quy trình tạo đơn Giữ Chỗ [Offer ID: ${input.offerId}]`,
+  );
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log('📥 [Bước 1/5] Tham số đầu vào:', {
     userId,
     provider: input.providerId || 'duffel (default)',
     offerId: input.offerId,
-    passengerCount: input.passengerIds?.length || 0,
+    passengerCount: (input.passengerIds?.length || 0) + (input.offerPassengers?.length || 0),
   });
 
   const provider = await checkProvider(input.providerId);
@@ -350,7 +352,9 @@ export const createHoldOrderViaProvider = async (
   const providerRegister = FlightProviderRegistry.get(providerCode);
   console.log(`🔌 [Bước 2/5] Đã kết nối Provider: [${providerCode.toUpperCase()}]`);
 
-  console.log(`🔍 [Bước 2/5] Đang kiểm tra thông tin User và Offer (${input.offerId})...`);
+  console.log(
+    `🔍 [Bước 2/5] Đang kiểm tra thông tin User và Offer [Offer ID: ${input.offerId}]...`,
+  );
   const [user, offer] = await Promise.all([
     checkUser(userId),
     providerRegister.getOfferDetails(input.offerId),
@@ -365,7 +369,9 @@ export const createHoldOrderViaProvider = async (
 
   try {
     const result = await prisma.$transaction(async (txt) => {
-      console.log('👥 [Bước 3/5] Đang tải & xác thực danh bạ hành khách trong CSDL...');
+      console.log(
+        `👥 [Bước 3/5] [Offer ID: ${input.offerId}] Đang tải & xác thực danh bạ hành khách trong CSDL...`,
+      );
       const passengers = await loadPassengersInSystem(
         {
           passengerIds: input.passengerIds || [],
@@ -376,13 +382,15 @@ export const createHoldOrderViaProvider = async (
       );
 
       console.log(
-        `✅ [Bước 3/5] Xác thực thành công ${passengers.length} hành khách:`,
+        `✅ [Bước 3/5] [Offer ID: ${input.offerId}] Xác thực thành công ${passengers.length} hành khách:`,
         passengers
           .map((p) => `${p.firstName} ${p.lastName} (${p.passportNumber || 'No Passport'})`)
           .join(', '),
       );
 
-      console.log(`🚀 [Bước 4/5] Gửi yêu cầu giữ chỗ sang [${providerCode.toUpperCase()}] API...`);
+      console.log(
+        `🚀 [Bước 4/5] [Offer ID: ${input.offerId}] Gửi yêu cầu giữ chỗ sang [${providerCode.toUpperCase()}] API...`,
+      );
       console.time('⏱️ [FlightHoldOrder] Provider giữ chỗ');
       holdOrderResponse = await providerRegister.createHoldOrder({
         offerId: input.offerId,
@@ -390,16 +398,18 @@ export const createHoldOrderViaProvider = async (
       });
       console.timeEnd('⏱️ [FlightHoldOrder] Provider giữ chỗ');
       console.log(
-        `✅ [Bước 4/5] Mã PNR: ${holdOrderResponse.bookingReference} | Order ID: ${holdOrderResponse.orderId}`,
+        `✅ [Bước 4/5] [Offer ID: ${input.offerId}] Mã PNR: ${holdOrderResponse.bookingReference} | Order ID: ${holdOrderResponse.orderId}`,
       );
 
-      console.log('📸 [Bước 5/5] Đóng gói Snapshot chuyến bay & hành khách bất biến...');
+      console.log(
+        `📸 [Bước 5/5] [Offer ID: ${input.offerId}] Đóng gói Snapshot chuyến bay & hành khách bất biến...`,
+      );
       const flightSnapshot = buildFlightSnapshot(input.offerId, holdOrderResponse);
       const passengerSnapshots = buildPassengerSnapshots(passengers, offer.passengers || []);
       const customFields = { flightSnapshot, passengerSnapshots };
 
       console.log(
-        '💾 [Bước 5/5] Lưu Booking & BookingPassengers vào PostgreSQL (Prisma $transaction)...',
+        `💾 [Bước 5/5] [Offer ID: ${input.offerId}] Lưu Booking & BookingPassengers vào PostgreSQL (Prisma $transaction)...`,
       );
       const createdBooking = await saveBooking(
         {
@@ -415,9 +425,12 @@ export const createHoldOrderViaProvider = async (
       );
 
       console.log('\n🎉 ====================================================');
-      console.log('🎉 [FlightHoldOrder] TẠO ĐƠN GIỮ CHỖ HOÀN TẤT THÀNH CÔNG!');
+      console.log(
+        `🎉 [FlightHoldOrder] TẠO ĐƠN GIỮ CHỖ HOÀN TẤT THÀNH CÔNG! [Offer ID: ${input.offerId}]`,
+      );
       console.log('====================================================');
       console.timeEnd('⏱️ [FlightHoldOrder] Thời gian thực thi');
+      console.log(`🎫 Offer ID: ${input.offerId}`);
       console.log(`📦 Booking ID (PostgreSQL): ${createdBooking.bookingId}`);
       console.log(`🔖 Mã PNR Hãng bay (Booking Reference): ${holdOrderResponse.bookingReference}`);
       console.log(
@@ -447,25 +460,27 @@ export const createHoldOrderViaProvider = async (
     return result;
   } catch (error: any) {
     console.error('\n❌ ====================================================');
-    console.error('❌ [FlightHoldOrder Error] XẢY RA LỖI TRONG QUY TRÌNH GIỮ CHỖ');
+    console.error(
+      `❌ [FlightHoldOrder Error] XẢY RA LỖI TRONG QUY TRÌNH GIỮ CHỖ [Offer ID: ${input.offerId}]`,
+    );
     console.error('====================================================');
     console.timeEnd('⏱️ [FlightHoldOrder] Thời gian thực thi');
-    console.error(`🔴 Thông điệp lỗi: ${error.message}`);
+    console.error(`🔴 Offer ID: ${input.offerId} | Thông điệp lỗi: ${error.message}`);
 
     const currentResponse = holdOrderResponse as ProviderHoldOrderResponse | null;
     if (currentResponse?.orderId && providerRegister.cancelOrder) {
       console.warn(
-        `⚠️ [Saga Rollback] Lỗi lưu DB sau khi đã giữ chỗ. Đang tự động hủy đơn ${currentResponse.orderId} trên Provider...`,
+        `⚠️ [Saga Rollback] [Offer ID: ${input.offerId}] Lỗi lưu DB sau khi đã giữ chỗ. Đang tự động hủy đơn ${currentResponse.orderId} trên Provider...`,
       );
 
       try {
         await providerRegister.cancelOrder(currentResponse.orderId);
         console.log(
-          `✅ [Saga Rollback] Đã hủy thành công đơn ${currentResponse.orderId} trên Provider! Không để lại vé rác.`,
+          `✅ [Saga Rollback] [Offer ID: ${input.offerId}] Đã hủy thành công đơn ${currentResponse.orderId} trên Provider! Không để lại vé rác.`,
         );
       } catch (cancelError: any) {
         console.error(
-          `🚨 [Saga Rollback CRITICAL] Không thể tự động hủy đơn ${currentResponse.orderId}:`,
+          `🚨 [Saga Rollback CRITICAL] [Offer ID: ${input.offerId}] Không thể tự động hủy đơn ${currentResponse.orderId}:`,
           cancelError.message,
         );
       }
