@@ -7,7 +7,7 @@ export const typeDefs = `#graphql
   scalar UUID
   scalar DateTime
 
-  enum PassengerType {
+  enum FlightPassengerType {
     ADULT
     CHILD
     INFANT
@@ -16,7 +16,7 @@ export const typeDefs = `#graphql
   input OfferPassengerInput {
     userId: UUID
     passengerid: UUID
-    type: PassengerType
+    type: FlightPassengerType
     firstName: String
     lastName: String
 
