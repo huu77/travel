@@ -6,6 +6,7 @@ import {
   type BookingPassengerSnapshot,
   type FlightBookingSnapshot,
   type ProviderHoldOrderResponse,
+  OfferPassengerInput,
 } from '@/types/booking.js';
 import '@/servers/duffel/index.js';
 import { prisma } from '@/prisma.js';
@@ -18,6 +19,9 @@ import {
   User,
 } from '@/generated/prisma/client.js';
 import { FlightProviderRegistry } from '@/shared/provider.js';
+import partition from 'lodash/partition.js';
+import omitBy from 'lodash/omitBy.js';
+import isUndefined from 'lodash/isUndefined.js';
 
 const checkUser = async (userId: string): Promise<Pick<User, 'userId' | 'email' | 'phone'>> => {
   const user = await prisma.user.findFirst({
@@ -64,16 +68,19 @@ const checkProvider = async (providerId: string) => {
   return provider;
 };
 
-async function loadPassengersInSystem({
-  passengerIds,
-  userId,
-}: {
-  passengerIds: string[];
-  userId?: string;
-}): Promise<Partial<Passenger>[]> {
+async function loadPassengerByIds(
+  {
+    passengerIds,
+    userId,
+  }: {
+    passengerIds: string[];
+    userId?: string;
+  },
+  txt: Prisma.TransactionClient,
+) {
   const uniquePassengerIds = [...new Set(passengerIds)];
 
-  const passengers = await prisma.passenger.findMany({
+  const passengers = await txt.passenger.findMany({
     where: {
       passengerId: {
         in: uniquePassengerIds,
@@ -111,6 +118,117 @@ async function loadPassengersInSystem({
         missingPassengerIds,
       },
     });
+  }
+
+  return passengers;
+}
+
+export async function loadPassengerByNewData(
+  offerPassengers: OfferPassengerInput[],
+  txt: Prisma.TransactionClient,
+): Promise<Passenger[]> {
+  if (!offerPassengers || offerPassengers.length === 0) {
+    return [];
+  }
+
+  const indexedPassengers = offerPassengers.map((p, index) => ({
+    index,
+    passenger: p,
+    passengerId: p.passengerId || (p as any).passengerid,
+  }));
+
+  const [passengersWithId, passengersWithoutId] = partition(
+    indexedPassengers,
+    (item) => item.passengerId,
+  );
+
+  const results: Passenger[] = new Array(offerPassengers.length);
+
+  if (passengersWithId.length > 0) {
+    const updatePromises = passengersWithId.map(async ({ index, passenger, passengerId }) => {
+      const rawUpdateData: Record<string, any> = {
+        firstName: passenger.firstName,
+        lastName: passenger.lastName,
+        type: passenger.type || PassengerType.ADULT,
+        gender: passenger.gender,
+        nationality: passenger.nationality,
+        passportNumber: passenger.passportNumber,
+        passportCountry: passenger.passportCountry,
+        passportExpiryDate: passenger.passportExpiryDate
+          ? new Date(passenger.passportExpiryDate)
+          : undefined,
+        dateOfBirth: passenger.dateOfBirth ? new Date(passenger.dateOfBirth) : undefined,
+      };
+
+      const updateData = omitBy(rawUpdateData, isUndefined) as Prisma.PassengerUpdateInput;
+
+      const updated = await txt.passenger.update({
+        where: {
+          passengerId: passengerId!,
+        },
+        data: updateData,
+      });
+      results[index] = updated;
+    });
+    await Promise.all(updatePromises);
+  }
+
+  if (passengersWithoutId.length > 0) {
+    const createData = passengersWithoutId.map(({ passenger }) => ({
+      userId: passenger.userId,
+      firstName: passenger.firstName,
+      lastName: passenger.lastName,
+      type: passenger.type || PassengerType.ADULT,
+      gender: passenger.gender ?? null,
+      nationality: passenger.nationality ?? null,
+      passportNumber: passenger.passportNumber ?? null,
+      passportCountry: passenger.passportCountry || 'VN',
+      passportExpiryDate: passenger.passportExpiryDate
+        ? new Date(passenger.passportExpiryDate)
+        : null,
+      dateOfBirth: passenger.dateOfBirth ? new Date(passenger.dateOfBirth) : new Date('1992-03-14'),
+    }));
+
+    const createdPassengers = await txt.passenger.createManyAndReturn({
+      data: createData,
+    });
+
+    passengersWithoutId.forEach(({ index }, i) => {
+      results[index] = createdPassengers[i]!;
+    });
+  }
+
+  return results;
+}
+
+async function loadPassengersInSystem(
+  {
+    passengerIds,
+    userId,
+    offerPassengers,
+  }: {
+    passengerIds: string[];
+    userId?: string;
+    offerPassengers: OfferPassengerInput[];
+  },
+  txt: Prisma.TransactionClient,
+): Promise<Partial<Passenger>[]> {
+  let passengers: Partial<Passenger>[] = [];
+
+  const shouldLoadPassengerByNewData = offerPassengers.length > 0;
+  if (shouldLoadPassengerByNewData) {
+    passengers = await loadPassengerByNewData(offerPassengers, txt);
+  }
+
+  const shouldLoadPassengerById = passengerIds.length > 0 && offerPassengers.length === 0 && userId;
+  if (shouldLoadPassengerById) {
+    passengers = await loadPassengerByIds(
+      {
+        passengerIds,
+        userId,
+      },
+      txt,
+    );
   }
 
   return passengers;
@@ -173,40 +291,41 @@ interface SaveBookingParams {
   };
 }
 
-const saveBooking = async ({
-  userId,
-  provider,
-  providerBookingId,
-  totalAmount,
-  currency,
-  passengers,
-  customFields,
-}: SaveBookingParams) => {
-  return await prisma.$transaction(async (tx) => {
-    const booking = await tx.booking.create({
+const saveBooking = async (
+  {
+    userId,
+    provider,
+    providerBookingId,
+    totalAmount,
+    currency,
+    passengers,
+    customFields,
+  }: SaveBookingParams,
+  txt: Prisma.TransactionClient,
+) => {
+  const booking = await txt.booking.create({
+    data: {
+      userId,
+      provider,
+      providerBookingId,
+      status: BookingStatus.PENDING,
+      totalAmount: new Prisma.Decimal(totalAmount),
+      currency,
+      customFields: customFields as unknown as Prisma.InputJsonValue,
+    },
+  });
+
+  for (let i = 0; i < passengers.length; i++) {
+    await txt.bookingPassenger.create({
       data: {
-        userId,
-        provider,
-        providerBookingId,
-        status: BookingStatus.PENDING,
-        totalAmount: new Prisma.Decimal(totalAmount),
-        currency,
-        customFields: customFields as unknown as Prisma.InputJsonValue,
+        bookingId: booking.bookingId,
+        passengerId: passengers[i]!.passengerId!,
+        customFields: customFields.passengerSnapshots[i] as unknown as Prisma.InputJsonValue,
       },
     });
+  }
 
-    for (let i = 0; i < passengers.length; i++) {
-      await tx.bookingPassenger.create({
-        data: {
-          bookingId: booking.bookingId,
-          passengerId: passengers[i]!.passengerId!,
-          customFields: customFields.passengerSnapshots[i] as unknown as Prisma.InputJsonValue,
-        },
-      });
-    }
-
-    return booking;
-  });
+  return booking;
 };
 
 export const createHoldOrderViaProvider = async (
@@ -241,78 +360,90 @@ export const createHoldOrderViaProvider = async (
     `✈️ [Bước 2/5] Vé hợp lệ! Hãng: ${offer.owner?.name || 'Airline'} | Tổng tiền: ${offer.total_amount} ${offer.total_currency} | Hạn giữ giá: ${offer.expires_at}`,
   );
 
-  console.log('👥 [Bước 3/5] Đang tải & xác thực danh bạ hành khách trong CSDL...');
-  const passengers = await loadPassengersInSystem({
-    passengerIds: input.passengerIds,
-    userId,
-  });
-  console.log(
-    `✅ [Bước 3/5] Xác thực thành công ${passengers.length} hành khách:`,
-    passengers
-      .map((p) => `${p.firstName} ${p.lastName} (${p.passportNumber || 'No Passport'})`)
-      .join(', '),
-  );
-
   let holdOrderResponse: ProviderHoldOrderResponse | null = null;
 
   try {
-    console.log(`🚀 [Bước 4/5] Gửi yêu cầu giữ chỗ sang [${providerCode.toUpperCase()}] API...`);
-    console.time('⏱️ [FlightHoldOrder] Provider giữ chỗ');
-    holdOrderResponse = await providerRegister.createHoldOrder({
-      offerId: input.offerId,
-      passengers,
+    const result = await prisma.$transaction(async (txt) => {
+      console.log('👥 [Bước 3/5] Đang tải & xác thực danh bạ hành khách trong CSDL...');
+      const passengers = await loadPassengersInSystem(
+        {
+          passengerIds: input.passengerIds,
+          userId,
+          offerPassengers: input.offerPassengers,
+        },
+        txt,
+      );
+
+      console.log(
+        `✅ [Bước 3/5] Xác thực thành công ${passengers.length} hành khách:`,
+        passengers
+          .map((p) => `${p.firstName} ${p.lastName} (${p.passportNumber || 'No Passport'})`)
+          .join(', '),
+      );
+
+      console.log(`🚀 [Bước 4/5] Gửi yêu cầu giữ chỗ sang [${providerCode.toUpperCase()}] API...`);
+      console.time('⏱️ [FlightHoldOrder] Provider giữ chỗ');
+      holdOrderResponse = await providerRegister.createHoldOrder({
+        offerId: input.offerId,
+        passengers,
+      });
+      console.timeEnd('⏱️ [FlightHoldOrder] Provider giữ chỗ');
+      console.log(
+        `✅ [Bước 4/5] Mã PNR: ${holdOrderResponse.bookingReference} | Order ID: ${holdOrderResponse.orderId}`,
+      );
+
+      console.log('📸 [Bước 5/5] Đóng gói Snapshot chuyến bay & hành khách bất biến...');
+      const flightSnapshot = buildFlightSnapshot(input.offerId, holdOrderResponse);
+      const passengerSnapshots = buildPassengerSnapshots(passengers, offer.passengers || []);
+      const customFields = { flightSnapshot, passengerSnapshots };
+
+      console.log(
+        '💾 [Bước 5/5] Lưu Booking & BookingPassengers vào PostgreSQL (Prisma $transaction)...',
+      );
+      const createdBooking = await saveBooking(
+        {
+          userId,
+          provider: providerCode,
+          providerBookingId: holdOrderResponse.orderId,
+          totalAmount: holdOrderResponse.totalAmount,
+          currency: holdOrderResponse.currency,
+          passengers,
+          customFields,
+        },
+        txt,
+      );
+
+      console.log('\n🎉 ====================================================');
+      console.log('🎉 [FlightHoldOrder] TẠO ĐƠN GIỮ CHỖ HOÀN TẤT THÀNH CÔNG!');
+      console.log('====================================================');
+      console.timeEnd('⏱️ [FlightHoldOrder] Thời gian thực thi');
+      console.log(`📦 Booking ID (PostgreSQL): ${createdBooking.bookingId}`);
+      console.log(`🔖 Mã PNR Hãng bay (Booking Reference): ${holdOrderResponse.bookingReference}`);
+      console.log(
+        `⏳ Hạn thanh toán (Payment Required By): ${holdOrderResponse.paymentRequiredBy || 'N/A'}`,
+      );
+      console.log(`💰 Tổng tiền: ${createdBooking.totalAmount} ${createdBooking.currency}`);
+      console.log(`📊 Trạng thái đơn: ${createdBooking.status}`);
+      console.log('====================================================\n');
+
+      return {
+        bookingId: createdBooking.bookingId,
+        userId: createdBooking.userId,
+        provider: createdBooking.provider,
+        providerBookingId: holdOrderResponse.orderId,
+        bookingReference: holdOrderResponse.bookingReference,
+        paymentRequiredBy: holdOrderResponse.paymentRequiredBy,
+        status: createdBooking.status,
+        totalAmount: createdBooking.totalAmount.toString(),
+        currency: createdBooking.currency,
+        carrier: holdOrderResponse.carrier,
+        slices: holdOrderResponse.slices,
+        passengers: passengerSnapshots,
+        createdAt: createdBooking.createdAt.toISOString(),
+      };
     });
-    console.timeEnd('⏱️ [FlightHoldOrder] Provider giữ chỗ');
-    console.log(
-      `✅ [Bước 4/5] Mã PNR: ${holdOrderResponse.bookingReference} | Order ID: ${holdOrderResponse.orderId}`,
-    );
 
-    console.log('📸 [Bước 5/5] Đóng gói Snapshot chuyến bay & hành khách bất biến...');
-    const flightSnapshot = buildFlightSnapshot(input.offerId, holdOrderResponse);
-    const passengerSnapshots = buildPassengerSnapshots(passengers, offer.passengers || []);
-    const customFields = { flightSnapshot, passengerSnapshots };
-
-    console.log(
-      '💾 [Bước 5/5] Lưu Booking & BookingPassengers vào PostgreSQL (Prisma $transaction)...',
-    );
-    const createdBooking = await saveBooking({
-      userId,
-      provider: providerCode,
-      providerBookingId: holdOrderResponse.orderId,
-      totalAmount: holdOrderResponse.totalAmount,
-      currency: holdOrderResponse.currency,
-      passengers,
-      customFields,
-    });
-
-    console.log('\n🎉 ====================================================');
-    console.log('🎉 [FlightHoldOrder] TẠO ĐƠN GIỮ CHỖ HOÀN TẤT THÀNH CÔNG!');
-    console.log('====================================================');
-    console.timeEnd('⏱️ [FlightHoldOrder] Thời gian thực thi');
-    console.log(`📦 Booking ID (PostgreSQL): ${createdBooking.bookingId}`);
-    console.log(`🔖 Mã PNR Hãng bay (Booking Reference): ${holdOrderResponse.bookingReference}`);
-    console.log(
-      `⏳ Hạn thanh toán (Payment Required By): ${holdOrderResponse.paymentRequiredBy || 'N/A'}`,
-    );
-    console.log(`💰 Tổng tiền: ${createdBooking.totalAmount} ${createdBooking.currency}`);
-    console.log(`📊 Trạng thái đơn: ${createdBooking.status}`);
-    console.log('====================================================\n');
-
-    return {
-      bookingId: createdBooking.bookingId,
-      userId: createdBooking.userId,
-      provider: createdBooking.provider,
-      providerBookingId: holdOrderResponse.orderId,
-      bookingReference: holdOrderResponse.bookingReference,
-      paymentRequiredBy: holdOrderResponse.paymentRequiredBy,
-      status: createdBooking.status,
-      totalAmount: createdBooking.totalAmount.toString(),
-      currency: createdBooking.currency,
-      carrier: holdOrderResponse.carrier,
-      slices: holdOrderResponse.slices,
-      passengers: passengerSnapshots,
-      createdAt: createdBooking.createdAt.toISOString(),
-    };
+    return result;
   } catch (error: any) {
     console.error('\n❌ ====================================================');
     console.error('❌ [FlightHoldOrder Error] XẢY RA LỖI TRONG QUY TRÌNH GIỮ CHỖ');
@@ -320,19 +451,20 @@ export const createHoldOrderViaProvider = async (
     console.timeEnd('⏱️ [FlightHoldOrder] Thời gian thực thi');
     console.error(`🔴 Thông điệp lỗi: ${error.message}`);
 
-    if (holdOrderResponse?.orderId && providerRegister.cancelOrder) {
+    const currentResponse = holdOrderResponse as ProviderHoldOrderResponse | null;
+    if (currentResponse?.orderId && providerRegister.cancelOrder) {
       console.warn(
-        `⚠️ [Saga Rollback] Lỗi lưu DB sau khi đã giữ chỗ. Đang tự động hủy đơn ${holdOrderResponse.orderId} trên Provider...`,
+        `⚠️ [Saga Rollback] Lỗi lưu DB sau khi đã giữ chỗ. Đang tự động hủy đơn ${currentResponse.orderId} trên Provider...`,
       );
 
       try {
-        await providerRegister.cancelOrder(holdOrderResponse.orderId);
+        await providerRegister.cancelOrder(currentResponse.orderId);
         console.log(
-          `✅ [Saga Rollback] Đã hủy thành công đơn ${holdOrderResponse.orderId} trên Provider! Không để lại vé rác.`,
+          `✅ [Saga Rollback] Đã hủy thành công đơn ${currentResponse.orderId} trên Provider! Không để lại vé rác.`,
         );
       } catch (cancelError: any) {
         console.error(
-          `🚨 [Saga Rollback CRITICAL] Không thể tự động hủy đơn ${holdOrderResponse.orderId}:`,
+          `🚨 [Saga Rollback CRITICAL] Không thể tự động hủy đơn ${currentResponse.orderId}:`,
           cancelError.message,
         );
       }

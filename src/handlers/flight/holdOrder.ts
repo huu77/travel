@@ -3,11 +3,37 @@ import { requireAuth } from '@/shared/auth-guard.js';
 import type { GraphQLContext } from '@/types/context.js';
 import type { HoldOrderInput, HoldOrderResult } from '@/types/booking.js';
 
-export const typeDefs = `#graphql
+export const typeDefs = `#graphql 
+  scalar UUID
+  scalar DateTime
+
+  enum PassengerType {
+    ADULT
+    CHILD
+    INFANT
+  }
+
+  input OfferPassengerInput {
+    userId: UUID
+    passengerid: UUID
+    type: PassengerType
+    firstName: String
+    lastName: String
+
+    dateOfBirth: DateTime!
+    gender: String!
+    nationality: String!
+
+    passportNumber: String!
+    passportCountry: String!
+    passportExpiryDate: DateTime!
+  }
+
   input HoldOrderInput {
-    providerId: String
+    providerId: String!
     offerId: String!
     passengerIds: [ID!]!
+    offerPassengers: [OfferPassengerInput!]
   }
 
   type BookingPassengerSnapshot {

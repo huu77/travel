@@ -9,6 +9,7 @@ import {
   JSONDefinition,
   DateTimeResolver,
   DateTimeTypeDefinition,
+  UUIDResolver,
 } from 'graphql-scalars';
 import { dirname, extname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -38,6 +39,7 @@ const baseTypeDefs = `#graphql
 `;
 
 const baseResolvers = {
+  UUID: UUIDResolver,
   EmailAddress: EmailAddressResolver,
   JSON: JSONResolver,
   DateTime: DateTimeResolver,

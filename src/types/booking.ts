@@ -1,5 +1,5 @@
 import type { FlightCarrier, FlightSlice } from './flight.js';
-import type { Passenger, User } from '@generated/prisma/client.js';
+import { PassengerType, type Passenger, type User } from '@generated/prisma/client.js';
 
 export enum PassengerTitle {
   MR = 'mr',
@@ -17,10 +17,27 @@ export enum ProviderGender {
   FEMALE = 'f',
 }
 
+export interface OfferPassengerInput {
+  passengerId?: string;
+  userId: string;
+  type: PassengerType;
+  firstName: string;
+  lastName: string;
+
+  dateOfBirth: string;
+  gender: Gender;
+  nationality: string;
+
+  passportNumber: string;
+  passportCountry: string;
+  passportExpiryDate: string;
+}
+
 export interface HoldOrderInput {
   providerId: string;
   offerId: string;
   passengerIds: string[];
+  offerPassengers: OfferPassengerInput[];
 }
 
 export interface HoldOrderProviderParams {
