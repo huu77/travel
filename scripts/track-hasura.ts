@@ -334,6 +334,11 @@ async function trackAll() {
 
   // 4. Register & Reload Remote Schema
   console.log('\n🌐 Đang đăng ký & đồng bộ Remote Schema...');
+  await callHasura({
+    type: 'remove_remote_schema',
+    args: { name: env.HASURA_REMOTE_SCHEMA_NAME },
+  });
+
   const remoteSchemaRes = await callHasura({
     type: 'add_remote_schema',
     args: {

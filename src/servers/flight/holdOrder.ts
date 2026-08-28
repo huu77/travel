@@ -203,13 +203,13 @@ export async function loadPassengerByNewData(
 
 async function loadPassengersInSystem(
   {
-    passengerIds,
+    passengerIds = [],
     userId,
-    offerPassengers,
+    offerPassengers = [],
   }: {
-    passengerIds: string[];
+    passengerIds?: string[];
     userId?: string;
-    offerPassengers: OfferPassengerInput[];
+    offerPassengers?: OfferPassengerInput[];
   },
   txt: Prisma.TransactionClient,
 ): Promise<Partial<Passenger>[]> {
@@ -220,12 +220,13 @@ async function loadPassengersInSystem(
     passengers = await loadPassengerByNewData(offerPassengers, txt);
   }
 
-  const shouldLoadPassengerById = passengerIds.length > 0 && offerPassengers.length === 0 && userId;
+  const shouldLoadPassengerById =
+    passengerIds.length > 0 && offerPassengers.length === 0 && Boolean(userId);
   if (shouldLoadPassengerById) {
     passengers = await loadPassengerByIds(
       {
         passengerIds,
-        userId,
+        ...(userId ? { userId } : {}),
       },
       txt,
     );
@@ -367,9 +368,9 @@ export const createHoldOrderViaProvider = async (
       console.log('👥 [Bước 3/5] Đang tải & xác thực danh bạ hành khách trong CSDL...');
       const passengers = await loadPassengersInSystem(
         {
-          passengerIds: input.passengerIds,
+          passengerIds: input.passengerIds || [],
           userId,
-          offerPassengers: input.offerPassengers,
+          offerPassengers: input.offerPassengers || [],
         },
         txt,
       );
