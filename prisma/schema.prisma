@@ -78,6 +78,7 @@ model User {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
+  @@index([phone])
   @@map("users")
 }
 
@@ -110,6 +111,7 @@ model Passenger {
   deletedAt DateTime?
 
   @@index([userId])
+  @@index([passportNumber])
   @@map("passengers")
 }
 
@@ -139,8 +141,8 @@ model Booking {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
+  @@unique([provider, providerBookingId])
   @@index([userId])
-  @@index([provider, providerBookingId])
   @@index([status])
   @@map("bookings")
 }
@@ -192,9 +194,9 @@ model Transaction {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
+  @@unique([provider, providerTransactionId])
   @@index([userId])
   @@index([bookingId])
-  @@index([provider, providerTransactionId])
   @@index([status])
   @@map("transactions")
 }
