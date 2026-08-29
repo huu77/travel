@@ -153,3 +153,23 @@ export interface DuffelOfferDetail {
     payment_required_by?: string | null;
   };
 }
+
+export interface SearchBookingsInput {
+  search?: string;
+  status?: string;
+  orderBy?: string;
+  order?: string;
+  page?: number;
+  limit?: number;
+}
+
+export interface BookingSearchResult {
+  bookingId: string;
+  bookingReference: string;
+  provider: string;
+  status: string;
+  totalAmount: number;
+  currency: string;
+  createdAt: string;
+  updatedAt: string;
+}
