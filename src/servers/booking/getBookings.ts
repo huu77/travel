@@ -9,7 +9,9 @@ export const buildFilter = (input: SearchBookingsInput) => {
 
   if (input.search) {
     const safeSearch = input.search.trim().replace(/'/g, "''");
-    where.push(`b."bookingReference" ILIKE '%${safeSearch}%'`);
+    where.push(
+      `(COALESCE(b."customFields"->'flightSnapshot'->>'bookingReference', b."providerBookingId", '') ILIKE '%${safeSearch}%')`,
+    );
   }
 
   if (input.status) {
@@ -20,7 +22,7 @@ export const buildFilter = (input: SearchBookingsInput) => {
   let order = 'ORDER BY b."createdAt" DESC';
   if (input.orderBy) {
     const allowedColumns: Record<string, string> = {
-      bookingReference: 'b."bookingReference"',
+      bookingReference: 'b."createdAt"',
       status: 'b."status"',
       totalAmount: 'b."totalAmount"',
       createdAt: 'b."createdAt"',
@@ -46,17 +48,17 @@ function getBookings(input: SearchBookingsInput, userId: string): Promise<Bookin
   const { where, order, pagination } = buildFilter(input);
   const query = `
     SELECT 
-      bookingId,
-      bookingReference,
-      provider,
-      status,
-      totalAmount,
-      currency,
-      createdAt,
-      updatedAt
+      b."bookingId",
+      COALESCE(b."customFields"->'flightSnapshot'->>'bookingReference', b."providerBookingId", '') as "bookingReference",
+      b."provider",
+      b."status",
+      b."totalAmount"::text as "totalAmount",
+      b."currency",
+      b."createdAt"::text as "createdAt",
+      b."updatedAt"::text as "updatedAt"
     FROM bookings b
     WHERE b."deletedAt" IS NULL 
-    AND b."userId" = ${userId}
+    AND b."userId" = '${userId}'::uuid
     ${where ? 'AND ' + where : ''}
     ${order}
     ${pagination}
