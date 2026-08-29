@@ -21,6 +21,7 @@ const getFlightBooking = async (bookingId: string, userId: string) => {
           code: true,
         },
       },
+      customFields: true,
     },
   });
 
@@ -73,12 +74,19 @@ async function cancelFlightBookingViaProvider(bookingId: string, userId: string)
   }
 
   await providerRegister.cancelOrder(flightBooking.providerBookingId!);
+
+  const currentCustomFields = (flightBooking.customFields as Record<string, unknown>) || {};
   await prisma.booking.update({
     where: {
       bookingId: bookingId,
     },
     data: {
       status: BookingStatus.CANCELLED,
+      customFields: {
+        ...currentCustomFields,
+        cancelledBy: userId,
+        cancelledAt: new Date().toISOString(),
+      },
     },
   });
 
