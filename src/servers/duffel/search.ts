@@ -117,7 +117,7 @@ export async function searchFlights(input: FlightSearchInput): Promise<FlightSea
   try {
     const startTime = Date.now();
     const response = await got.post<{ data: any }>(
-      `${env.DUFFEL_API_URL}/air/offer_requests?return_offers=true`,
+      `${env.DUFFEL_API_URL}/air/offer_requests?return_offers=true&view=itineraries`,
       {
         headers: {
           Authorization: `Bearer ${env.DUFFEL_API_TOKEN}`,
