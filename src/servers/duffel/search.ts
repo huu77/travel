@@ -13,7 +13,7 @@ function formatDate(date: string | Date): string {
 }
 
 export function buildSearchPayload(input: FlightSearchInput) {
-  const slices = [
+  const slices: any[] = [
     {
       origin: input.origin.trim().toUpperCase(),
       destination: input.destination.trim().toUpperCase(),
@@ -29,71 +29,122 @@ export function buildSearchPayload(input: FlightSearchInput) {
     });
   }
 
-  const passengers = [
-    ...Array(Math.max(1, input.adults ?? 1)).fill({ type: FlightPassengerType.ADULT }),
+  const passengers: any[] = [
+    ...Array(Math.max(1, input.adults ?? 1))
+      .fill(null)
+      .map((_, idx) => {
+        const loyalty = input.passengersLoyalty?.find(
+          (l) => l.passengerIndex === undefined || l.passengerIndex === idx,
+        );
+        return {
+          type: FlightPassengerType.ADULT,
+          ...(loyalty
+            ? {
+                loyalty_programme_accounts: [
+                  {
+                    airline_iata_code: loyalty.airlineIataCode.toUpperCase(),
+                    account_number: loyalty.accountNumber,
+                  },
+                ],
+              }
+            : {}),
+        };
+      }),
     ...Array(input.children ?? 0).fill({ type: FlightPassengerType.CHILD }),
     ...Array(input.infants ?? 0).fill({ type: FlightPassengerType.INFANT_WITHOUT_SEAT }),
   ];
 
-  return {
-    data: {
-      slices,
-      passengers,
-      cabin_class: input.cabinClass ?? CabinClass.ECONOMY,
-    },
+  const payloadData: any = {
+    slices,
+    passengers,
+    cabin_class: input.cabinClass ?? CabinClass.ECONOMY,
   };
+
+  if (input.maxConnections !== undefined && input.maxConnections !== null) {
+    payloadData.max_connections = input.maxConnections;
+  }
+
+  if (input.corporateCode) {
+    payloadData.corporate_code = input.corporateCode;
+  }
+
+  return { data: payloadData };
 }
 
 export function transformSearchResponse(data: any): FlightSearchResult {
-  const offers = (data.offers || []).map((offer: any) => ({
-    offerId: offer.id,
-    totalAmount: offer.total_amount,
-    currency: offer.total_currency,
-    expiresAt: offer.expires_at,
-    carrier: {
-      iataCode: offer.owner.iata_code,
-      name: offer.owner.name,
-      logoUrl: offer.owner.logo_symbol_url ?? null,
-    },
-    slices: (offer.slices || []).map((slice: any) => ({
-      origin: {
-        iataCode: slice.origin.iata_code,
-        name: slice.origin.name,
-        cityName: slice.origin.city_name ?? null,
+  const offers = (data.offers || []).map((offer: any) => {
+    const refundCond = offer.conditions?.refund_before_departure;
+    const changeCond = offer.conditions?.change_before_departure;
+
+    return {
+      offerId: offer.id,
+      totalAmount: offer.total_amount,
+      currency: offer.total_currency,
+      expiresAt: offer.expires_at,
+      isSplitTicket: Boolean(offer.is_split_ticket),
+      carrier: {
+        iataCode: offer.owner.iata_code,
+        name: offer.owner.name,
+        logoUrl: offer.owner.logo_symbol_url ?? null,
       },
-      destination: {
-        iataCode: slice.destination.iata_code,
-        name: slice.destination.name,
-        cityName: slice.destination.city_name ?? null,
-      },
-      departureDate:
-        slice.departure_date ||
-        slice.segments?.[0]?.departing_at?.split('T')[0] ||
-        slice.segments?.[0]?.departing_at ||
-        '',
-      duration: slice.duration,
-      segments: (slice.segments || []).map((seg: any) => ({
+      conditions: offer.conditions
+        ? {
+            refundBeforeDeparture: refundCond
+              ? {
+                  allowed: Boolean(refundCond.allowed),
+                  penaltyAmount: refundCond.penalty_amount ?? null,
+                  penaltyCurrency: refundCond.penalty_currency ?? null,
+                }
+              : null,
+            changeBeforeDeparture: changeCond
+              ? {
+                  allowed: Boolean(changeCond.allowed),
+                  penaltyAmount: changeCond.penalty_amount ?? null,
+                  penaltyCurrency: changeCond.penalty_currency ?? null,
+                }
+              : null,
+          }
+        : null,
+      slices: (offer.slices || []).map((slice: any) => ({
         origin: {
-          iataCode: seg.origin.iata_code,
-          name: seg.origin.name,
+          iataCode: slice.origin.iata_code,
+          name: slice.origin.name,
+          cityName: slice.origin.city_name ?? null,
         },
         destination: {
-          iataCode: seg.destination.iata_code,
-          name: seg.destination.name,
+          iataCode: slice.destination.iata_code,
+          name: slice.destination.name,
+          cityName: slice.destination.city_name ?? null,
         },
-        departureAt: seg.departing_at,
-        arrivalAt: seg.arriving_at,
-        carrier: {
-          iataCode: seg.operating_carrier.iata_code,
-          name: seg.operating_carrier.name,
-          logoUrl: seg.operating_carrier.logo_symbol_url ?? null,
-        },
-        flightNumber: `${seg.operating_carrier.iata_code}${seg.operating_carrier_flight_number}`,
-        aircraft: seg.aircraft?.name ?? null,
-        duration: seg.duration,
+        departureDate:
+          slice.departure_date ||
+          slice.segments?.[0]?.departing_at?.split('T')[0] ||
+          slice.segments?.[0]?.departing_at ||
+          '',
+        duration: slice.duration,
+        segments: (slice.segments || []).map((seg: any) => ({
+          origin: {
+            iataCode: seg.origin.iata_code,
+            name: seg.origin.name,
+          },
+          destination: {
+            iataCode: seg.destination.iata_code,
+            name: seg.destination.name,
+          },
+          departureAt: seg.departing_at,
+          arrivalAt: seg.arriving_at,
+          carrier: {
+            iataCode: seg.operating_carrier.iata_code,
+            name: seg.operating_carrier.name,
+            logoUrl: seg.operating_carrier.logo_symbol_url ?? null,
+          },
+          flightNumber: `${seg.operating_carrier.iata_code}${seg.operating_carrier_flight_number}`,
+          aircraft: seg.aircraft?.name ?? null,
+          duration: seg.duration,
+        })),
       })),
-    })),
-  }));
+    };
+  });
 
   return {
     offerRequestId: data.id,
@@ -112,6 +163,8 @@ export async function searchFlights(input: FlightSearchInput): Promise<FlightSea
     returnDate: input.returnDate ?? 'Một chiều (One-way)',
     passengers: payload.data.passengers.length,
     cabinClass: payload.data.cabin_class,
+    maxConnections: input.maxConnections ?? 'Không giới hạn',
+    corporateCode: input.corporateCode ?? 'Không dùng',
   });
 
   try {

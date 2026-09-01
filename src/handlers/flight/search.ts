@@ -11,6 +11,12 @@ export const typeDefs = `#graphql
     FIRST
   }
 
+  input PassengerLoyaltyInput {
+    passengerIndex: Int
+    airlineIataCode: String!
+    accountNumber: String!
+  }
+
   input FlightSearchInput {
     provider: String
     origin: String!
@@ -21,6 +27,9 @@ export const typeDefs = `#graphql
     adults: Int
     children: Int
     infants: Int
+    maxConnections: Int
+    corporateCode: String
+    passengersLoyalty: [PassengerLoyaltyInput!]
   }
 
   type FlightAirport {
@@ -54,13 +63,26 @@ export const typeDefs = `#graphql
     segments: [FlightSegment!]!
   }
 
+  type ConditionDetail {
+    allowed: Boolean!
+    penaltyAmount: String
+    penaltyCurrency: String
+  }
+
+  type OfferConditions {
+    refundBeforeDeparture: ConditionDetail
+    changeBeforeDeparture: ConditionDetail
+  }
+
   type FlightOffer {
     offerId: ID!
     totalAmount: String!
     currency: String!
     expiresAt: String!
+    isSplitTicket: Boolean
     carrier: FlightCarrier!
     slices: [FlightSlice!]!
+    conditions: OfferConditions
   }
 
   type FlightSearchResult {

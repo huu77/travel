@@ -13,39 +13,48 @@ export enum FlightPassengerType {
   INFANT_WITHOUT_SEAT = 'infant_without_seat',
 }
 
+export interface PassengerLoyaltyInput {
+  passengerIndex?: number;
+  airlineIataCode: string;
+  accountNumber: string;
+}
+
 export interface FlightSearchInput {
-  provider?: string | null; // Mã nhà cung cấp: "duffel", "amadeus" (Mặc định: "duffel")
-  origin: string; // Mã IATA sân bay đi: "SGN"
-  destination: string; // Mã IATA sân bay đến: "HAN"
-  departureDate: string; // "2026-09-25"
-  returnDate?: string | null; // Khứ hồi (nếu có)
-  cabinClass?: CabinClass; // Mặc định: CabinClass.ECONOMY
-  adults?: number; // Mặc định: 1
-  children?: number; // Mặc định: 0
-  infants?: number; // Mặc định: 0
+  provider?: string | null;
+  origin: string;
+  destination: string;
+  departureDate: string;
+  returnDate?: string | null;
+  cabinClass?: CabinClass;
+  adults?: number;
+  children?: number;
+  infants?: number;
+  maxConnections?: number | null;
+  corporateCode?: string | null;
+  passengersLoyalty?: PassengerLoyaltyInput[] | null;
 }
 
 export interface FlightAirport {
-  iataCode: string; // "SGN"
-  name: string; // "Tan Son Nhat International Airport"
-  cityName?: string; // "Ho Chi Minh City"
+  iataCode: string;
+  name: string;
+  cityName?: string | null;
 }
 
 export interface FlightCarrier {
-  iataCode: string; // "VN"
-  name: string; // "Vietnam Airlines"
+  iataCode: string;
+  name: string;
   logoUrl?: string | null;
 }
 
 export interface FlightSegment {
   origin: FlightAirport;
   destination: FlightAirport;
-  departureAt: string; // ISO DateTime
-  arrivalAt: string; // ISO DateTime
+  departureAt: string;
+  arrivalAt: string;
   carrier: FlightCarrier;
-  flightNumber: string; // "VN216"
-  aircraft?: string | null; // "Boeing 787-9"
-  duration: string; // "PT2H10M"
+  flightNumber: string;
+  aircraft?: string | null;
+  duration: string;
 }
 
 export interface FlightSlice {
@@ -56,13 +65,26 @@ export interface FlightSlice {
   segments: FlightSegment[];
 }
 
+export interface ConditionDetail {
+  allowed: boolean;
+  penaltyAmount?: string | null;
+  penaltyCurrency?: string | null;
+}
+
+export interface OfferConditions {
+  refundBeforeDeparture?: ConditionDetail | null;
+  changeBeforeDeparture?: ConditionDetail | null;
+}
+
 export interface FlightOffer {
-  offerId: string; // Duffel Offer ID: "off_00009ht..."
-  totalAmount: string; // "3850000"
-  currency: string; // "VND"
-  expiresAt: string; // Thời hạn giữ giá của hãng
+  offerId: string;
+  totalAmount: string;
+  currency: string;
+  expiresAt: string;
+  isSplitTicket?: boolean;
   carrier: FlightCarrier;
   slices: FlightSlice[];
+  conditions?: OfferConditions | null;
 }
 
 export interface FlightSearchResult {
