@@ -9,6 +9,7 @@
   },
   "scripts": {
     "dev": "tsx watch src/index.ts",
+    "test": "tsx --test src/**/*.test.ts",
     "build": "prisma generate && tsc",
     "postinstall": "prisma generate",
     "start": "tsx dist/index.js",
