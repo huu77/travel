@@ -32,6 +32,7 @@ export interface FlightSearchInput {
   maxConnections?: number | null;
   corporateCode?: string | null;
   passengersLoyalty?: PassengerLoyaltyInput[] | null;
+  view?: string | null; // "offers" | "itineraries"
 }
 
 export interface FlightAirport {

@@ -30,6 +30,7 @@ export const typeDefs = `#graphql
     maxConnections: Int
     corporateCode: String
     passengersLoyalty: [PassengerLoyaltyInput!]
+    view: String
   }
 
   type FlightAirport {

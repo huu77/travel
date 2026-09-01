@@ -57,7 +57,7 @@ export function buildSearchPayload(input: FlightSearchInput) {
   const payloadData: any = {
     slices,
     passengers,
-    cabin_class: input.cabinClass ?? CabinClass.ECONOMY,
+    cabin_class: (input.cabinClass || CabinClass.ECONOMY).toLowerCase(),
   };
 
   if (input.maxConnections !== undefined && input.maxConnections !== null) {
@@ -71,21 +71,23 @@ export function buildSearchPayload(input: FlightSearchInput) {
   return { data: payloadData };
 }
 
-export function transformSearchResponse(data: any): FlightSearchResult {
-  const offers = (data.offers || []).map((offer: any) => {
+export function transformSearchResponse(data: any, rawOffersOverride?: any[]): FlightSearchResult {
+  const rawOffers = rawOffersOverride || data.offers || [];
+
+  const offers = rawOffers.map((offer: any) => {
     const refundCond = offer.conditions?.refund_before_departure;
     const changeCond = offer.conditions?.change_before_departure;
 
     return {
       offerId: offer.id,
       totalAmount: offer.total_amount,
-      currency: offer.total_currency,
+      currency: offer.total_currency || offer.currency || 'USD',
       expiresAt: offer.expires_at,
       isSplitTicket: Boolean(offer.is_split_ticket),
       carrier: {
-        iataCode: offer.owner.iata_code,
-        name: offer.owner.name,
-        logoUrl: offer.owner.logo_symbol_url ?? null,
+        iataCode: offer.owner?.iata_code || 'ZZ',
+        name: offer.owner?.name || 'Standard Airline',
+        logoUrl: offer.owner?.logo_symbol_url ?? null,
       },
       conditions: offer.conditions
         ? {
@@ -107,40 +109,40 @@ export function transformSearchResponse(data: any): FlightSearchResult {
         : null,
       slices: (offer.slices || []).map((slice: any) => ({
         origin: {
-          iataCode: slice.origin.iata_code,
-          name: slice.origin.name,
-          cityName: slice.origin.city_name ?? null,
+          iataCode: slice.origin?.iata_code || '',
+          name: slice.origin?.name || '',
+          cityName: slice.origin?.city_name ?? null,
         },
         destination: {
-          iataCode: slice.destination.iata_code,
-          name: slice.destination.name,
-          cityName: slice.destination.city_name ?? null,
+          iataCode: slice.destination?.iata_code || '',
+          name: slice.destination?.name || '',
+          cityName: slice.destination?.city_name ?? null,
         },
         departureDate:
           slice.departure_date ||
           slice.segments?.[0]?.departing_at?.split('T')[0] ||
           slice.segments?.[0]?.departing_at ||
           '',
-        duration: slice.duration,
+        duration: slice.duration || 'PT0H',
         segments: (slice.segments || []).map((seg: any) => ({
           origin: {
-            iataCode: seg.origin.iata_code,
-            name: seg.origin.name,
+            iataCode: seg.origin?.iata_code || '',
+            name: seg.origin?.name || '',
           },
           destination: {
-            iataCode: seg.destination.iata_code,
-            name: seg.destination.name,
+            iataCode: seg.destination?.iata_code || '',
+            name: seg.destination?.name || '',
           },
-          departureAt: seg.departing_at,
-          arrivalAt: seg.arriving_at,
+          departureAt: seg.departing_at || '',
+          arrivalAt: seg.arriving_at || '',
           carrier: {
-            iataCode: seg.operating_carrier.iata_code,
-            name: seg.operating_carrier.name,
-            logoUrl: seg.operating_carrier.logo_symbol_url ?? null,
+            iataCode: seg.operating_carrier?.iata_code || 'ZZ',
+            name: seg.operating_carrier?.name || 'Standard Airline',
+            logoUrl: seg.operating_carrier?.logo_symbol_url ?? null,
           },
-          flightNumber: `${seg.operating_carrier.iata_code}${seg.operating_carrier_flight_number}`,
+          flightNumber: `${seg.operating_carrier?.iata_code || ''}${seg.operating_carrier_flight_number || ''}`,
           aircraft: seg.aircraft?.name ?? null,
-          duration: seg.duration,
+          duration: seg.duration || 'PT0H',
         })),
       })),
     };
@@ -155,6 +157,7 @@ export function transformSearchResponse(data: any): FlightSearchResult {
 
 export async function searchFlights(input: FlightSearchInput): Promise<FlightSearchResult> {
   const payload = buildSearchPayload(input);
+  const viewFormat = input.view ? input.view.toLowerCase() : 'offers';
 
   console.log('🛫 [Duffel] Gửi yêu cầu tìm chuyến bay:', {
     origin: input.origin,
@@ -163,31 +166,67 @@ export async function searchFlights(input: FlightSearchInput): Promise<FlightSea
     returnDate: input.returnDate ?? 'Một chiều (One-way)',
     passengers: payload.data.passengers.length,
     cabinClass: payload.data.cabin_class,
+    view: viewFormat,
     maxConnections: input.maxConnections ?? 'Không giới hạn',
     corporateCode: input.corporateCode ?? 'Không dùng',
   });
 
   try {
     const startTime = Date.now();
-    const response = await got.post<{ data: any }>(
-      `${env.DUFFEL_API_URL}/air/offer_requests?return_offers=true&view=itineraries`,
-      {
-        headers: {
-          Authorization: `Bearer ${env.DUFFEL_API_TOKEN}`,
-          'Duffel-Version': 'v2',
-          'Content-Type': 'application/json',
-        },
-        json: payload,
-        responseType: 'json',
+
+    // Construct URL with query parameters
+    let requestUrl = `${env.DUFFEL_API_URL}/air/offer_requests?return_offers=true`;
+    if (viewFormat === 'itineraries') {
+      requestUrl += '&view=itineraries';
+    }
+
+    console.log(`🔗 [Duffel Request URL]: ${requestUrl}`);
+
+    const response = await got.post<{ data: any }>(requestUrl, {
+      headers: {
+        Authorization: `Bearer ${env.DUFFEL_API_TOKEN}`,
+        'Duffel-Version': 'v2',
+        'Content-Type': 'application/json',
       },
-    );
+      json: payload,
+      responseType: 'json',
+    });
     const duration = Date.now() - startTime;
 
-    const result = transformSearchResponse(response.body.data);
+    const resData = response.body.data;
+    console.log(`✅ [Duffel API Response] Status 201 trong ${duration}ms!`);
+    console.log(`📦 [Duffel Raw Data Keys]:`, JSON.stringify(response, null, 2));
+    console.log(
+      `📦 [Duffel Raw Offers Count on POST]:`,
+      resData.offers?.length ?? 'undefined/none',
+    );
 
-    console.log(`✅ [Duffel] Tìm kiếm thành công trong ${duration}ms!`);
+    let rawOffers = resData.offers;
+
+    if (!rawOffers || rawOffers.length === 0) {
+      console.log(
+        `🔄 [Duffel Fallback] POST response không chứa offers. Đang lấy danh sách vé qua GET /air/offers?offer_request_id=${resData.id}...`,
+      );
+      const getOffersResponse = await got.get<{ data: any[] }>(
+        `${env.DUFFEL_API_URL}/air/offers?offer_request_id=${resData.id}`,
+        {
+          headers: {
+            Authorization: `Bearer ${env.DUFFEL_API_TOKEN}`,
+            'Duffel-Version': 'v2',
+          },
+          responseType: 'json',
+        },
+      );
+      rawOffers = getOffersResponse.body.data || [];
+      console.log(
+        `🎉 [Duffel Fallback Thành công] Lấy về ${rawOffers.length} vé qua GET /air/offers!`,
+      );
+    }
+
+    const result = transformSearchResponse(resData, rawOffers);
+
     console.log(`📦 [Duffel] Offer Request ID: ${result.offerRequestId}`);
-    console.log(`🎫 [Duffel] Tổng số chuyến bay tìm thấy: ${result.totalOffers}`);
+    console.log(`🎫 [Duffel] Tổng số chuyến bay xử lý: ${result.totalOffers}`);
 
     if (result.offers.length > 0) {
       console.log('🔍 [Duffel] 3 chuyến bay tiêu biểu:');
