@@ -28,11 +28,13 @@ export function mappingDuffelPassengers({
       ? new Date(p.dateOfBirth).toISOString().split('T')[0]!
       : '1990-01-01';
 
+    const offerPassengerId = offerPassengers?.[index]?.id || offerPassengers?.[0]?.id;
+
     const passengerPayload: any = {
-      id: offerPassengers?.[index]?.id || '',
+      ...(offerPassengerId ? { id: offerPassengerId } : {}),
       title: isFemale ? PassengerTitle.MS : PassengerTitle.MR,
-      given_name: p.firstName || '',
-      family_name: p.lastName || '',
+      given_name: p.firstName || 'Traveler',
+      family_name: p.lastName || 'Passenger',
       born_on: bornOn,
       gender: isFemale ? ProviderGender.FEMALE : ProviderGender.MALE,
       email: userEmail,
@@ -60,11 +62,22 @@ export async function createDuffelHoldOrder(
   params: HoldOrderProviderParams,
 ): Promise<ProviderHoldOrderResponse> {
   const { offerId, passengers } = params;
-  let offerPassengers = params.offerPassengers;
-  if (!offerPassengers) {
-    const offer = await getDuffelOffer(offerId);
-    offerPassengers = offer.passengers || [];
+
+  const offer = await getDuffelOffer(offerId);
+  const offerPassengers = offer.passengers || [];
+
+  if (offer.payment_requirements?.requires_instant_payment) {
+    throw new GraphQLError(
+      'Hãng hàng không bắt buộc vé này phải thanh toán ngay (Instant Payment), không hỗ trợ giữ chỗ (Hold Order). Vui lòng chọn chuyến bay khác!',
+      {
+        extensions: {
+          code: 'HOLD_NOT_SUPPORTED',
+          http: { status: 400 },
+        },
+      },
+    );
   }
+
   const user = params.user || { email: 'traveler@example.com', phone: '+84901234567' };
   const duffelPassengers = mappingDuffelPassengers({ passengers, offerPassengers, user });
 
@@ -78,6 +91,7 @@ export async function createDuffelHoldOrder(
 
   console.log('🎟️ [Duffel Hold Order] Gửi yêu cầu giữ chỗ:', {
     offerId,
+    passengerCount: duffelPassengers.length,
     payload: JSON.stringify(payload, null, 2),
   });
 
@@ -147,10 +161,16 @@ export async function createDuffelHoldOrder(
     };
   } catch (error: any) {
     const duffelErrors = error?.response?.body?.errors;
-    const errorMsg =
+    let errorMsg =
       duffelErrors?.map((e: any) => `${e.title || e.type}: ${e.message}`).join(', ') ||
       error.message ||
       'Lỗi khi thực hiện giữ chỗ từ Duffel';
+
+    const isInvalidType = duffelErrors?.some((e: any) => e.code === 'invalid_order_create_type');
+    if (isInvalidType) {
+      errorMsg =
+        'Hãng hàng không của chuyến bay này không hỗ trợ giữ chỗ (Hold Order). Vui lòng chọn chuyến bay khác!';
+    }
 
     console.error('❌ [Duffel Hold Order Error]:', errorMsg);
     if (duffelErrors) {
@@ -159,7 +179,7 @@ export async function createDuffelHoldOrder(
 
     throw new GraphQLError(errorMsg, {
       extensions: {
-        code: 'HOLD_ORDER_FAILED',
+        code: isInvalidType ? 'HOLD_NOT_SUPPORTED' : 'HOLD_ORDER_FAILED',
         http: { status: error?.response?.statusCode || 400 },
         duffelErrors,
       },

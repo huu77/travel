@@ -77,6 +77,7 @@ export function transformSearchResponse(data: any, rawOffersOverride?: any[]): F
   const offers = rawOffers.map((offer: any) => {
     const refundCond = offer.conditions?.refund_before_departure;
     const changeCond = offer.conditions?.change_before_departure;
+    const requiresInstantPay = offer.payment_requirements?.requires_instant_payment;
 
     return {
       offerId: offer.id,
@@ -84,6 +85,7 @@ export function transformSearchResponse(data: any, rawOffersOverride?: any[]): F
       currency: offer.total_currency || offer.currency || 'USD',
       expiresAt: offer.expires_at,
       isSplitTicket: Boolean(offer.is_split_ticket),
+      allowedToHold: requiresInstantPay !== undefined ? !requiresInstantPay : true,
       carrier: {
         iataCode: offer.owner?.iata_code || 'ZZ',
         name: offer.owner?.name || 'Standard Airline',
@@ -195,14 +197,11 @@ export async function searchFlights(input: FlightSearchInput): Promise<FlightSea
 
     const resData = response.body.data;
     console.log(`✅ [Duffel API Response] Status 201 trong ${duration}ms!`);
-    console.log(`📦 [Duffel Raw Data Keys]:`, response);
-    console.log(
-      `📦 [Duffel Raw Offers Count on POST]:`,
-      resData.offers?.length ?? 'undefined/none',
-    );
 
     let rawOffers = resData.offers;
 
+    // SMART FALLBACK: If data.offers is missing or empty (which occurs when view=itineraries is used),
+    // fetch all offers associated with this offer_request_id via GET /air/offers?offer_request_id={id}
     if (!rawOffers || rawOffers.length === 0) {
       console.log(
         `🔄 [Duffel Fallback] POST response không chứa offers. Đang lấy danh sách vé qua GET /air/offers?offer_request_id=${resData.id}...`,
@@ -233,7 +232,7 @@ export async function searchFlights(input: FlightSearchInput): Promise<FlightSea
       result.offers.slice(0, 3).forEach((offer, idx) => {
         const seg = offer.slices[0]?.segments[0];
         console.log(
-          `   ${idx + 1}. Hãng: ${offer.carrier.name} (${offer.carrier.iataCode}) | Giá: ${Number(offer.totalAmount).toLocaleString()} ${offer.currency} | Chuyến bay: ${seg?.flightNumber || 'N/A'} (${seg?.departureAt} -> ${seg?.arrivalAt})`,
+          `   ${idx + 1}. Hãng: ${offer.carrier.name} (${offer.carrier.iataCode}) | Giá: ${Number(offer.totalAmount).toLocaleString()} ${offer.currency} | Hold: ${offer.allowedToHold ? 'Có' : 'Bắt buộc trả ngay'} | Chuyến bay: ${seg?.flightNumber || 'N/A'}`,
         );
       });
     }

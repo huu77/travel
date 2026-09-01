@@ -81,6 +81,7 @@ export const typeDefs = `#graphql
     currency: String!
     expiresAt: String!
     isSplitTicket: Boolean
+    allowedToHold: Boolean
     carrier: FlightCarrier!
     slices: [FlightSlice!]!
     conditions: OfferConditions

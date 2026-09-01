@@ -83,6 +83,7 @@ export interface FlightOffer {
   currency: string;
   expiresAt: string;
   isSplitTicket?: boolean;
+  allowedToHold?: boolean;
   carrier: FlightCarrier;
   slices: FlightSlice[];
   conditions?: OfferConditions | null;
