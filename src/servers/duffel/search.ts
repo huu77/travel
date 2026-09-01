@@ -195,7 +195,7 @@ export async function searchFlights(input: FlightSearchInput): Promise<FlightSea
 
     const resData = response.body.data;
     console.log(`✅ [Duffel API Response] Status 201 trong ${duration}ms!`);
-    console.log(`📦 [Duffel Raw Data Keys]:`, JSON.stringify(response, null, 2));
+    console.log(`📦 [Duffel Raw Data Keys]:`, response);
     console.log(
       `📦 [Duffel Raw Offers Count on POST]:`,
       resData.offers?.length ?? 'undefined/none',
