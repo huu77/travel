@@ -10,6 +10,17 @@ import got from 'got';
 import { getDuffelOffer } from './offer.js';
 import type { Passenger, User } from '@generated/prisma/client.js';
 
+export function normalizePassengerName(name?: string): string {
+  if (!name) return '';
+  return name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D')
+    .replace(/[^a-zA-Z\s\-']/g, '')
+    .trim();
+}
+
 export function mappingDuffelPassengers({
   passengers,
   offerPassengers = [],
@@ -30,11 +41,17 @@ export function mappingDuffelPassengers({
 
     const offerPassengerId = offerPassengers?.[index]?.id || offerPassengers?.[0]?.id;
 
+    const rawGivenName = p.firstName || 'Traveler';
+    const rawFamilyName = p.lastName || 'Passenger';
+
+    const cleanGivenName = normalizePassengerName(rawGivenName) || 'Traveler';
+    const cleanFamilyName = normalizePassengerName(rawFamilyName) || 'Passenger';
+
     const passengerPayload: any = {
       ...(offerPassengerId ? { id: offerPassengerId } : {}),
       title: isFemale ? PassengerTitle.MS : PassengerTitle.MR,
-      given_name: p.firstName || 'Traveler',
-      family_name: p.lastName || 'Passenger',
+      given_name: cleanGivenName,
+      family_name: cleanFamilyName,
       born_on: bornOn,
       gender: isFemale ? ProviderGender.FEMALE : ProviderGender.MALE,
       email: userEmail,
