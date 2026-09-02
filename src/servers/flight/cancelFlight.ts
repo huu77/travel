@@ -34,11 +34,12 @@ const getFlightBooking = async (bookingId: string, userId: string) => {
     });
   }
 
-  const shouldThrowError: boolean = (
-    [BookingStatus.CANCELLED, BookingStatus.FAILED] as BookingStatus[]
-  ).includes(flightBooking.status);
-  if (shouldThrowError) {
-    throw new GraphQLError('Booking này đã bị hủy hoặc thất bại', {
+  if (flightBooking.status === BookingStatus.CANCELLED) {
+    return flightBooking;
+  }
+
+  if (flightBooking.status === BookingStatus.FAILED) {
+    throw new GraphQLError('Đơn đặt vé này đã ở trạng thái thất bại, không thể thực hiện hủy!', {
       extensions: {
         code: 'BAD_USER_INPUT',
         http: { status: 400 },
@@ -47,7 +48,7 @@ const getFlightBooking = async (bookingId: string, userId: string) => {
   }
 
   if (!flightBooking.providerBookingId) {
-    throw new GraphQLError('Booking này không có mã PNR', {
+    throw new GraphQLError('Booking này không có mã đơn hợp lệ từ Hãng bay để hủy!', {
       extensions: {
         code: 'BAD_USER_INPUT',
         http: { status: 400 },
@@ -61,6 +62,11 @@ const getFlightBooking = async (bookingId: string, userId: string) => {
 async function cancelFlightBookingViaProvider(bookingId: string, userId: string): Promise<boolean> {
   const flightBooking = await getFlightBooking(bookingId, userId);
   console.log('[CancelFlight] - flightBooking ', JSON.stringify(flightBooking, null, 2));
+
+  if (flightBooking.status === BookingStatus.CANCELLED) {
+    console.log(`[CancelFlight]: Booking ${bookingId} đã ở trạng thái CANCELLED từ trước.`);
+    return true;
+  }
 
   const providerCode = flightBooking.providerRef?.code || flightBooking.provider;
   const providerRegister = FlightProviderRegistry.get(providerCode);

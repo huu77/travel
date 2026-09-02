@@ -33,11 +33,22 @@ export interface OfferPassengerInput {
   passportExpiryDate: string;
 }
 
+export interface SelectedSeatInput {
+  passengerIndex?: number;
+  passengerName?: string;
+  designator: string;
+  serviceId?: string;
+  segmentId?: string;
+  totalAmount?: string;
+  totalCurrency?: string;
+}
+
 export interface HoldOrderInput {
   providerId: string;
   offerId: string;
   passengerIds: string[];
-  offerPassengers: OfferPassengerInput[];
+  offerPassengers?: OfferPassengerInput[];
+  selectedSeats?: SelectedSeatInput[];
 }
 
 export interface HoldOrderProviderParams {
@@ -60,6 +71,8 @@ export interface BookingPassengerSnapshot {
   passportNumber?: string | null | undefined;
   passportCountry?: string | null | undefined;
   passportExpiryDate?: string | null | undefined;
+  seatNumber?: string | null | undefined;
+  seatServiceId?: string | null | undefined;
 }
 
 export interface FlightBookingSnapshot {

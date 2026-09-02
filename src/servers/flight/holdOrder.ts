@@ -301,9 +301,16 @@ const buildFlightSnapshot = (
 const buildPassengerSnapshots = (
   dbPassengers: Partial<Passenger>[],
   offerPassengers: any[],
+  selectedSeats: any[] = [],
 ): BookingPassengerSnapshot[] => {
   return dbPassengers.map((p, index) => {
     const isFemale = p.gender?.toLowerCase() === Gender.FEMALE;
+    const fullName = `${p.firstName || ''} ${p.lastName || ''}`.trim().toLowerCase();
+    const seatInfo = selectedSeats.find(
+      (s) =>
+        s.passengerIndex === index ||
+        (s.passengerName && s.passengerName.trim().toLowerCase() === fullName),
+    );
 
     return {
       passengerId: p.passengerId || '',
@@ -326,6 +333,8 @@ const buildPassengerSnapshots = (
           ? p.passportExpiryDate.toISOString().split('T')[0]!
           : String(p.passportExpiryDate).split('T')[0]!
         : null,
+      seatNumber: seatInfo?.designator ?? null,
+      seatServiceId: seatInfo?.serviceId ?? null,
     };
   });
 };
@@ -456,7 +465,11 @@ export const createHoldOrderViaProvider = async (
         `📸 [Bước 5/5] [Offer ID: ${input.offerId}] Đóng gói Snapshot chuyến bay & hành khách bất biến...`,
       );
       const flightSnapshot = buildFlightSnapshot(input.offerId, holdOrderResponse);
-      const passengerSnapshots = buildPassengerSnapshots(passengers, offer.passengers || []);
+      const passengerSnapshots = buildPassengerSnapshots(
+        passengers,
+        offer.passengers || [],
+        input.selectedSeats || [],
+      );
       const customFields = { flightSnapshot, passengerSnapshots };
 
       console.log(

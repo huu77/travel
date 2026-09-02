@@ -29,11 +29,22 @@ export const typeDefs = `#graphql
     passportExpiryDate: DateTime!
   }
 
+  input SelectedSeatInput {
+    passengerIndex: Int
+    passengerName: String
+    designator: String!
+    serviceId: String
+    segmentId: String
+    totalAmount: String
+    totalCurrency: String
+  }
+
   input HoldOrderInput {
     providerId: String!
     offerId: String!
     passengerIds: [ID!]!
     offerPassengers: [OfferPassengerInput!]
+    selectedSeats: [SelectedSeatInput!]
   }
 
   type BookingPassengerSnapshot {
@@ -49,6 +60,8 @@ export const typeDefs = `#graphql
     passportNumber: String
     passportCountry: String
     passportExpiryDate: String
+    seatNumber: String
+    seatServiceId: String
   }
 
   type HoldOrderResult {
