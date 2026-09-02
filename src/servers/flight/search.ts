@@ -8,6 +8,8 @@ const DEFAULT_EMPTY_FLIGHT_RESULT: FlightSearchResult = {
   offers: [],
 };
 
+import { prisma } from '@/prisma.js';
+
 export const searchFlightsViaProvider = async (
   input: FlightSearchInput,
 ): Promise<FlightSearchResult> => {
@@ -15,7 +17,29 @@ export const searchFlightsViaProvider = async (
 
   try {
     const provider = FlightProviderRegistry.get(providerCode);
-    return await provider.searchFlights(input);
+    const result = await provider.searchFlights(input);
+
+    const dbProvider = await prisma.provider.findFirst({
+      where: {
+        code: providerCode,
+        deletedAt: null,
+      },
+      select: {
+        providerId: true,
+        code: true,
+      },
+    });
+
+    const providerId = dbProvider?.providerId || null;
+
+    return {
+      ...result,
+      offers: result.offers.map((offer) => ({
+        ...offer,
+        providerId,
+        provider: providerCode,
+      })),
+    };
   } catch (error) {
     console.error(
       `❌ [FlightSearch Error] Không tìm thấy hoặc lỗi từ Provider "${providerCode}":`,

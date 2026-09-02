@@ -1,4 +1,5 @@
 import type { HoldOrderProviderParams, ProviderHoldOrderResponse } from './booking.js';
+import { SeatMapResult } from './seat.js';
 
 export enum CabinClass {
   ECONOMY = 'economy',
@@ -78,6 +79,8 @@ export interface OfferConditions {
 }
 
 export interface FlightOffer {
+  providerId?: string | null;
+  provider?: string;
   offerId: string;
   totalAmount: string;
   currency: string;
@@ -101,4 +104,5 @@ export interface IFlightProvider {
   getOfferDetails(offerId: string): Promise<any>;
   createHoldOrder(params: HoldOrderProviderParams): Promise<ProviderHoldOrderResponse>;
   cancelOrder(providerBookingId: string): Promise<boolean>;
+  getSeatMap(offerId: string): Promise<SeatMapResult[]>;
 }

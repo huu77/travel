@@ -1,43 +1,7 @@
 import { env } from '@/shared/env.js';
 import got from 'got';
 import { GraphQLError } from 'graphql';
-
-export interface SeatElement {
-  type: string; // "seat", "empty", "galley", "lavatory", "exit_door"
-  designator?: string | null; // "12A"
-  name?: string | null;
-  disclosures?: string[];
-  availableServices?: {
-    serviceId: string;
-    totalAmount: string;
-    totalCurrency: string;
-  }[];
-}
-
-export interface SeatRowSection {
-  elements: SeatElement[];
-}
-
-export interface SeatRow {
-  sections: SeatRowSection[];
-}
-
-export interface SeatCabin {
-  cabinClass: string;
-  deck: number;
-  wings?: {
-    firstRowIndex: number;
-    lastRowIndex: number;
-  } | null;
-  rows: SeatRow[];
-}
-
-export interface SeatMapResult {
-  id: string;
-  sliceId: string;
-  segmentId: string;
-  cabins: SeatCabin[];
-}
+import type { SeatMapResult } from '@/types/seat.js';
 
 export async function getDuffelSeatMaps(offerId: string): Promise<SeatMapResult[]> {
   console.log(`🛫 [Duffel] Lấy sơ đồ ghế ngồi cho Offer ID: ${offerId}`);
@@ -56,11 +20,8 @@ export async function getDuffelSeatMaps(offerId: string): Promise<SeatMapResult[
     const rawMaps = response.body.data || [];
     console.log(`✅ [Duffel] Lấy sơ đồ ghế thành công! Tìm thấy ${rawMaps.length} sơ đồ.`);
 
-    return rawMaps.map((map: any) => ({
-      id: map.id,
-      sliceId: map.slice_id,
-      segmentId: map.segment_id,
-      cabins: (map.cabins || []).map((cabin: any) => ({
+    const seatMaps: SeatMapResult[] = rawMaps.map((map: any) => {
+      const cabins = (map.cabins || []).map((cabin: any) => ({
         cabinClass: cabin.cabin_class,
         deck: cabin.deck ?? 1,
         wings: cabin.wings
@@ -84,10 +45,26 @@ export async function getDuffelSeatMaps(offerId: string): Promise<SeatMapResult[
             })),
           })),
         })),
-      })),
-    }));
+      }));
+
+      return {
+        id: map.id,
+        sliceId: map.slice_id,
+        segmentId: map.segment_id,
+        cabins,
+      };
+    });
+
+    return seatMaps;
   } catch (error: any) {
     const duffelErrors = error?.response?.body?.errors;
+    const isExpired = duffelErrors?.some(
+      (e: any) =>
+        e.code === 'offer_no_longer_available' ||
+        e.message?.includes('no longer available') ||
+        e.title?.includes('no longer available'),
+    );
+
     const errorMsg =
       duffelErrors?.map((e: any) => `${e.title || e.type}: ${e.message}`).join(', ') ||
       error.message ||
@@ -97,7 +74,7 @@ export async function getDuffelSeatMaps(offerId: string): Promise<SeatMapResult[
 
     throw new GraphQLError(errorMsg, {
       extensions: {
-        code: 'SEAT_MAP_ERROR',
+        code: isExpired ? 'OFFER_EXPIRED' : 'SEAT_MAP_ERROR',
         http: { status: error?.response?.statusCode || 400 },
         duffelErrors,
       },

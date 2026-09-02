@@ -1,4 +1,4 @@
-import { getDuffelSeatMaps } from '@/servers/duffel/seatMap.js';
+import getSeatMaps from '@/servers/flight/seatMap.js';
 
 export const typeDefs = `#graphql
   type SeatAvailableService {
@@ -43,14 +43,17 @@ export const typeDefs = `#graphql
   }
 
   extend type Query {
-    getSeatMaps(offerId: ID!): [SeatMapResult!]!
+    getSeatMaps(offerId: ID!, providerId: ID): [SeatMapResult!]!
   }
 `;
 
 export const resolvers = {
   Query: {
-    getSeatMaps: async (_parent: unknown, args: { offerId: string }) => {
-      return await getDuffelSeatMaps(args.offerId);
+    getSeatMaps: async (
+      _parent: unknown,
+      args: { offerId: string; providerId?: string | null },
+    ) => {
+      return await getSeatMaps(args.offerId, args.providerId);
     },
   },
 };

@@ -5,6 +5,7 @@ import { searchFlights } from './search.js';
 import { createDuffelHoldOrder } from './holdOrder.js';
 import { getDuffelOffer } from './offer.js';
 import { cancelDuffelOrder } from './cancelOrder.js';
+import { getDuffelSeatMaps } from './seatMap.js';
 
 @FlightProvider('duffel')
 class DuffelFlightProvider implements IFlightProvider {
@@ -24,6 +25,10 @@ class DuffelFlightProvider implements IFlightProvider {
 
   async cancelOrder(providerBookingId: string): Promise<boolean> {
     return await cancelDuffelOrder(providerBookingId);
+  }
+
+  async getSeatMap(offerId: string): Promise<any> {
+    return await getDuffelSeatMaps(offerId);
   }
 }
 

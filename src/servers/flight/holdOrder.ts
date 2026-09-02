@@ -46,26 +46,65 @@ const checkUser = async (userId: string): Promise<Pick<User, 'userId' | 'email' 
   return user;
 };
 
-const checkProvider = async (providerId: string) => {
-  const provider = await prisma.provider.findFirst({
-    where: {
-      providerId,
-      deletedAt: null,
-    },
-    select: {
-      providerId: true,
-      code: true,
-    },
-  });
+const isUUID = (str: string) =>
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
 
-  if (!provider) {
-    console.error(`❌ [HoldOrder] Không tìm thấy Provider: ${providerId}`);
-    throw new GraphQLError('Provider not found', {
-      extensions: { code: 'NOT_FOUND', http: { status: 400 } },
-    });
+const checkProvider = async (providerId?: string | null) => {
+  if (providerId) {
+    if (isUUID(providerId)) {
+      const provider = await prisma.provider.findFirst({
+        where: {
+          providerId,
+          deletedAt: null,
+        },
+        select: {
+          providerId: true,
+          code: true,
+        },
+      });
+      if (provider) return provider;
+    } else {
+      const provider = await prisma.provider.findFirst({
+        where: {
+          code: providerId.toLowerCase(),
+          deletedAt: null,
+        },
+        select: {
+          providerId: true,
+          code: true,
+        },
+      });
+      if (provider) return provider;
+    }
   }
 
-  return provider;
+  // Fallback to active FLIGHT provider (e.g. duffel)
+  const defaultProvider =
+    (await prisma.provider.findFirst({
+      where: {
+        type: 'FLIGHT',
+        isActive: true,
+        deletedAt: null,
+      },
+      select: {
+        providerId: true,
+        code: true,
+      },
+    })) ||
+    (await prisma.provider.findFirst({
+      where: {
+        type: 'FLIGHT',
+        deletedAt: null,
+      },
+      select: {
+        providerId: true,
+        code: true,
+      },
+    }));
+
+  if (defaultProvider) return defaultProvider;
+
+  return { providerId: 'default', code: 'duffel' };
 };
 
 async function loadPassengerByIds(

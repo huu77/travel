@@ -76,6 +76,8 @@ export const typeDefs = `#graphql
   }
 
   type FlightOffer {
+    providerId: ID
+    provider: String
     offerId: ID!
     totalAmount: String!
     currency: String!

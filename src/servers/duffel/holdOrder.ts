@@ -21,6 +21,68 @@ export function normalizePassengerName(name?: string): string {
     .trim();
 }
 
+function calculateAge(dob: Date): number {
+  const diffMs = Date.now() - dob.getTime();
+  const ageDt = new Date(diffMs);
+  return Math.abs(ageDt.getUTCFullYear() - 1970);
+}
+
+function resolveBornOn(pDob?: Date | string | null, targetType?: string): string {
+  const parsedDate = pDob ? new Date(pDob) : null;
+  const isValidDate =
+    parsedDate && !isNaN(parsedDate.getTime()) && parsedDate.getTime() < Date.now();
+
+  const type = (targetType || 'adult').toLowerCase();
+
+  if (type === 'adult') {
+    if (isValidDate) {
+      const age = calculateAge(parsedDate);
+      if (age >= 12) {
+        return parsedDate.toISOString().split('T')[0]!;
+      }
+    }
+    // Default adult date (e.g., 30 years old)
+    return '1995-05-15';
+  }
+
+  if (type === 'child') {
+    if (isValidDate) {
+      const age = calculateAge(parsedDate);
+      if (age >= 2 && age < 12) {
+        return parsedDate.toISOString().split('T')[0]!;
+      }
+    }
+    // Default child date (e.g., 7 years old)
+    return '2018-05-15';
+  }
+
+  if (type === 'infant' || type === 'infant_without_seat') {
+    if (isValidDate) {
+      const age = calculateAge(parsedDate);
+      if (age < 2) {
+        return parsedDate.toISOString().split('T')[0]!;
+      }
+    }
+    // Default infant date (e.g., 10 months old)
+    return '2025-05-15';
+  }
+
+  if (isValidDate) {
+    return parsedDate.toISOString().split('T')[0]!;
+  }
+
+  return '1995-05-15';
+}
+
+function resolvePassportExpiry(pExpiry?: Date | string | null): string {
+  const parsed = pExpiry ? new Date(pExpiry) : null;
+  const isFuture = parsed && !isNaN(parsed.getTime()) && parsed.getTime() > Date.now();
+  if (isFuture) {
+    return parsed.toISOString().split('T')[0]!;
+  }
+  return '2032-12-31';
+}
+
 export function mappingDuffelPassengers({
   passengers,
   offerPassengers = [],
@@ -35,11 +97,11 @@ export function mappingDuffelPassengers({
 
   return passengers.map((p, index) => {
     const isFemale = p.gender?.toLowerCase() === 'female';
-    const bornOn = p.dateOfBirth
-      ? new Date(p.dateOfBirth).toISOString().split('T')[0]!
-      : '1990-01-01';
+    const offerPassenger = offerPassengers[index];
+    const offerPassengerId = offerPassenger?.id;
+    const targetType = offerPassenger?.type || (p.type ? String(p.type).toLowerCase() : 'adult');
 
-    const offerPassengerId = offerPassengers?.[index]?.id || offerPassengers?.[0]?.id;
+    const bornOn = resolveBornOn(p.dateOfBirth, targetType);
 
     const rawGivenName = p.firstName || 'Traveler';
     const rawFamilyName = p.lastName || 'Passenger';
@@ -62,11 +124,9 @@ export function mappingDuffelPassengers({
       passengerPayload.identity_documents = [
         {
           type: 'passport',
-          unique_identifier: p.passportNumber,
-          issuing_country_code: p.passportCountry || 'VN',
-          expires_on: p.passportExpiryDate
-            ? new Date(p.passportExpiryDate).toISOString().split('T')[0]!
-            : '2030-01-01',
+          unique_identifier: p.passportNumber.trim().toUpperCase(),
+          issuing_country_code: (p.passportCountry || 'VN').toUpperCase(),
+          expires_on: resolvePassportExpiry(p.passportExpiryDate),
         },
       ];
     }
@@ -82,6 +142,20 @@ export async function createDuffelHoldOrder(
 
   const offer = await getDuffelOffer(offerId);
   const offerPassengers = offer.passengers || [];
+
+  if (offerPassengers.length > 0 && passengers.length !== offerPassengers.length) {
+    throw new GraphQLError(
+      `Số lượng hành khách bạn chọn (${passengers.length} người) không khớp với số lượng hành khách của gói vé này (${offerPassengers.length} người). Vui lòng chọn đúng ${offerPassengers.length} hành khách hoặc quay lại trang Tìm kiếm chuyến bay để chọn số lượng hành khách tương ứng!`,
+      {
+        extensions: {
+          code: 'PASSENGER_COUNT_MISMATCH',
+          http: { status: 400 },
+          expectedCount: offerPassengers.length,
+          actualCount: passengers.length,
+        },
+      },
+    );
+  }
 
   if (offer.payment_requirements?.requires_instant_payment) {
     throw new GraphQLError(
